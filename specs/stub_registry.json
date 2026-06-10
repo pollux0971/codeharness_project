@@ -37,22 +37,17 @@
       "owner": "ROADMAP:phase-2"
     },
     {
-      "symbol": "detectPhase",
+      "symbol": "applySlidingWindow",
       "file": "context-manager/src/index.ts",
       "owner": "ROADMAP:phase-2"
     },
     {
-      "symbol": "requiredContextSections",
+      "symbol": "applySlidingWindow",
       "file": "context-manager/src/index.ts",
       "owner": "ROADMAP:phase-2"
     },
     {
-      "symbol": "requiredContextSections",
-      "file": "context-manager/src/index.ts",
-      "owner": "ROADMAP:phase-2"
-    },
-    {
-      "symbol": "requiredContextSections",
+      "symbol": "applySlidingWindow",
       "file": "context-manager/src/index.ts",
       "owner": "ROADMAP:phase-2"
     },
