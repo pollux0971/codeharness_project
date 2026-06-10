@@ -97,11 +97,6 @@
       "owner": "STORY-000.4"
     },
     {
-      "symbol": "runPreflight",
-      "file": "preflight-runner/src/index.ts",
-      "owner": "ROADMAP:phase-2"
-    },
-    {
       "symbol": "runSkillTests",
       "file": "skill-tester/src/index.ts",
       "owner": "ROADMAP:phase-2"
