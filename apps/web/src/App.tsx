@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { TraceViewer } from './TraceViewer';
+import { ApprovalQueue } from './ApprovalQueue';
 
 const API = (import.meta as any).env?.VITE_API ?? 'http://127.0.0.1:8787';
 const ROLE: Record<string, string> = {
@@ -86,6 +87,8 @@ export function App() {
         <section data-panel="platform" style={{ padding: 18 }}>
           <Eyebrow n="C" t="Platform" />
           {!d && !err && <Placeholder label="platform" />}
+          <Group t="Approval queue (mock)" />
+          <ApprovalQueue />
           {d && <>
             <Group t="Escalations — agent asked, not guessed" />
             {d.escalations.map((e: any, i: number) => (
