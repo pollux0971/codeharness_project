@@ -6,6 +6,6 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@codeharness/agent-output": "0.0.0"
+    "@codeharness/agent-output": "workspace:*"
   }
 }
