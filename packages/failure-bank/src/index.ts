@@ -1,9 +1,11 @@
-// Failure Gene Bank (skeleton).
+// Failure Gene Bank.
 // The Debugger writes genes; the Context Manager reads them.
 // Key invariants from GEP/Evolver:
 //   - selective, not additive: dedupe by matching_signal, don't stack entries
 //   - inject AVOID only, not full diagnostic history
 //   - consolidated_count >= 2 means systemic — escalate earlier
+import fs from 'node:fs';
+import path from 'node:path';
 
 export type FailureType =
   | 'test_failure' | 'build_error' | 'type_error' | 'runtime_error'
@@ -123,15 +125,45 @@ export function formatForInjection(genes: FailureGene[]): string {
 }
 
 /**
- * Consolidate the bank when it exceeds maxActiveGenes.
- * Strategy: merge genes that share matching_signal tokens into one, keeping the
- * strongest AVOID and highest consolidated_count. Archive genes that are resolved
- * or have not been matched in > 30 days (stub — real cutoff from config).
+ * Consolidate the bank: merge active genes that share any matching_signal token,
+ * and remove resolved/superseded genes. Output order is deterministic (sorted by id).
+ * Does not call Date.now() or Math.random().
  */
 export function consolidate(bank: WarningBank): { merged: number; archived: number } {
-  // Full implementation: cluster genes by signal-token overlap, merge each cluster,
-  // move resolved/superseded to a separate archive structure.
-  throw new Error('not implemented: bank consolidation (merge by signal overlap, archive stale)');
+  let mergedCount = 0;
+  // Archive non-active genes
+  const archived = bank.bank.filter(g => g.status !== 'active').length;
+  let active = bank.bank.filter(g => g.status === 'active');
+
+  // Sort by id for deterministic merge order
+  active = active.slice().sort((a, b) => a.id.localeCompare(b.id));
+
+  const used = new Set<number>();
+  const result: FailureGene[] = [];
+
+  for (let i = 0; i < active.length; i++) {
+    if (used.has(i)) continue;
+    used.add(i);
+    const base = { ...active[i] };
+    const tokensI = base.matching_signal.split('|').map(t => t.trim());
+
+    for (let j = i + 1; j < active.length; j++) {
+      if (used.has(j)) continue;
+      const tokensJ = active[j].matching_signal.split('|').map(t => t.trim());
+      if (tokensI.some(t => tokensJ.includes(t))) {
+        base.consolidated_count += active[j].consolidated_count;
+        base.version += 1;
+        if (active[j].avoid.length > base.avoid.length) base.avoid = active[j].avoid;
+        used.add(j);
+        mergedCount++;
+      }
+    }
+
+    result.push(base);
+  }
+
+  bank.bank = result;
+  return { merged: mergedCount, archived };
 }
 
 /** Check whether `gene.consolidated_count` marks a recurring/systemic pattern. */
@@ -139,11 +171,66 @@ export function isSystemic(gene: FailureGene, cfg: BankConfig = DEFAULT_CONFIG):
   return gene.consolidated_count >= cfg.recurringThreshold;
 }
 
-// ── Persistence boundary (delegate to the harness file layer) ──────────────
+// ── Validation ─────────────────────────────────────────────────────────────
 
-export async function loadBank(_bankPath: string): Promise<WarningBank> {
-  throw new Error('not implemented: read docs/failure_bank/warning_bank.json');
+export interface ValidationResult { ok: boolean; errors: string[] }
+
+const VALID_FAILURE_TYPES = new Set<string>([
+  'test_failure','build_error','type_error','runtime_error','validation_fail',
+  'regression','timeout','scope_error','skill_failure','unknown',
+]);
+const VALID_SEVERITIES = new Set<string>(['fatal','recoverable','warning']);
+const VALID_STATUSES   = new Set<string>(['active','resolved','superseded']);
+const REQUIRED_FIELDS  = ['id','matching_signal','summary','strategy','avoid','failure_type','severity','story_id','version','created_at','status'];
+
+/** Validate a candidate FailureGene. Returns machine-readable errors. */
+export function validateFailureGene(input: unknown): ValidationResult {
+  const errors: string[] = [];
+  if (!input || typeof input !== 'object') return { ok: false, errors: ['not an object'] };
+  const g = input as Record<string, unknown>;
+  for (const f of REQUIRED_FIELDS) {
+    if (g[f] === undefined || g[f] === null) errors.push(`missing required field: ${f}`);
+  }
+  if (typeof g['avoid'] === 'string' && g['avoid'].trim().split(/\s+/).length > 40)
+    errors.push('avoid exceeds 40 words');
+  if (typeof g['failure_type'] === 'string' && !VALID_FAILURE_TYPES.has(g['failure_type']))
+    errors.push(`invalid failure_type: ${g['failure_type']}`);
+  if (typeof g['severity'] === 'string' && !VALID_SEVERITIES.has(g['severity']))
+    errors.push(`invalid severity: ${g['severity']}`);
+  if (typeof g['status'] === 'string' && !VALID_STATUSES.has(g['status']))
+    errors.push(`invalid status: ${g['status']}`);
+  return { ok: errors.length === 0, errors };
 }
-export async function saveBank(_bank: WarningBank, _bankPath: string): Promise<void> {
-  throw new Error('not implemented: write docs/failure_bank/warning_bank.json');
+
+// ── Persistence boundary ───────────────────────────────────────────────────
+
+const UNSAFE_PREFIXES = ['/etc', '/proc', '/sys', '/root', '/dev'];
+
+function assertSafePath(p: string): void {
+  const resolved = path.resolve(p);
+  if (UNSAFE_PREFIXES.some(d => resolved === d || resolved.startsWith(d + '/')))
+    throw new Error(`unsafe bank path rejected: ${resolved}`);
+  if (path.basename(resolved) === '.env')
+    throw new Error(`unsafe bank path rejected: ${resolved}`);
+}
+
+/** Load the warning bank from a JSON file. Returns an empty bank if the file does not exist.
+ *  Silently drops malformed genes. */
+export async function loadBank(bankPath: string): Promise<WarningBank> {
+  assertSafePath(bankPath);
+  if (!fs.existsSync(bankPath)) {
+    return { schema_version: 'failure_bank/v1', updated_at: '', bank: [] };
+  }
+  const raw = fs.readFileSync(bankPath, 'utf8');
+  const parsed = JSON.parse(raw) as WarningBank;
+  parsed.bank = parsed.bank.filter(g => validateFailureGene(g).ok);
+  return parsed;
+}
+
+/** Persist the warning bank to a JSON file. Creates parent directories as needed. */
+export async function saveBank(bank: WarningBank, bankPath: string): Promise<void> {
+  assertSafePath(bankPath);
+  const dir = path.dirname(bankPath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(bankPath, JSON.stringify(bank, null, 2) + '\n', 'utf8');
 }

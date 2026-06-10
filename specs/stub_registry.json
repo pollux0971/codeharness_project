@@ -57,21 +57,6 @@
       "owner": "ROADMAP:phase-2"
     },
     {
-      "symbol": "consolidate",
-      "file": "failure-bank/src/index.ts",
-      "owner": "ROADMAP:phase-2"
-    },
-    {
-      "symbol": "loadBank",
-      "file": "failure-bank/src/index.ts",
-      "owner": "ROADMAP:phase-2"
-    },
-    {
-      "symbol": "saveBank",
-      "file": "failure-bank/src/index.ts",
-      "owner": "ROADMAP:phase-2"
-    },
-    {
       "symbol": "writeCheckpoint",
       "file": "harness-core/src/index.ts",
       "owner": "STORY-002.1"
