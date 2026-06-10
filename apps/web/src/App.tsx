@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { TraceViewer } from './TraceViewer';
 
 const API = (import.meta as any).env?.VITE_API ?? 'http://127.0.0.1:8787';
 const ROLE: Record<string, string> = {
@@ -63,10 +64,12 @@ export function App() {
             </div>
           ))}
         </section>
-        {/* Panel B — Conversation */}
+        {/* Panel B — Conversation + Trace */}
         <section data-panel="conversation" style={{ padding: 18, borderRight: '1px solid rgba(230,237,243,.1)' }}>
           <Eyebrow n="B" t="Conversation — agent dialogue" />
           {!d && !err && <Placeholder label="conversation" />}
+          <Group t="Trace events (mock)" />
+          <TraceViewer />
           {d && d.conv.messages.map((m: any) => (
             <div key={m.seq} style={{ borderLeft: '1px solid rgba(230,237,243,.1)', paddingLeft: 16, paddingBottom: 15, marginLeft: 6 }}>
               <div style={{ ...mono, fontSize: 11.5 }}>
