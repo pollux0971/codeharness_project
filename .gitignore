@@ -1,0 +1,9 @@
+node_modules/
+dist/
+*.tsbuildinfo
+workspaces/*
+!workspaces/.gitkeep
+artifacts/*
+!artifacts/.gitkeep
+.env
+*.log
