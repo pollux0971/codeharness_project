@@ -53,6 +53,8 @@ importers:
 
   packages/codex-auth: {}
 
+  packages/container-runtime: {}
+
   packages/context-manager: {}
 
   packages/debugger-runtime: {}

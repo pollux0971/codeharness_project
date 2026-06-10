@@ -8,6 +8,9 @@
       "path": "packages/codegraph-adapter"
     },
     {
+      "path": "packages/container-runtime"
+    },
+    {
       "path": "packages/codex-auth"
     },
     {
