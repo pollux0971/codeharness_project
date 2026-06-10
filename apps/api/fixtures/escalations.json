@@ -1,0 +1,7 @@
+{
+  "sample": true,
+  "escalations": [
+    { "type": "needs_scope_expansion", "raised_by": "developer", "story_id": "STORY-003.2", "reason": "applyPatch needs to touch workspace-manager/src/git.ts which is outside the contract write-set.", "evidence_refs": ["codegraph#applyPatch"], "requested_decision": "Approve a contract revision adding workspace-manager/src/git.ts to the write-set?", "options": [ {"option_id":"widen","tradeoff":"adds one file to scope; keeps the story whole"}, {"option_id":"split","tradeoff":"new story for git ops; smaller blast radius, more handoff"} ] },
+    { "type": "needs_clarification", "raised_by": "developer", "story_id": "STORY-004.1", "reason": "Objective does not say whether the Supervisor context excludes the full Developer trace.", "evidence_refs": ["contract#STORY-004.1"], "requested_decision": "Should buildRoleContextPacket exclude raw developer trace for the supervisor role?", "options": [ {"option_id":"exclude","tradeoff":"smaller context, safer; matches memory model"}, {"option_id":"include_summary","tradeoff":"more context, higher token cost"} ] }
+  ]
+}

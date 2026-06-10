@@ -1,0 +1,140 @@
+{
+  "description": "Every documented `not implemented` stub MUST appear here with an owner that is a builder story id or a roadmap phase id. Enforced by stub_registry.test.ts.",
+  "valid_roadmap_owners": [
+    "ROADMAP:phase-1",
+    "ROADMAP:phase-2",
+    "ROADMAP:phase-3"
+  ],
+  "stubs": [
+    {
+      "symbol": "<module>",
+      "file": "codegraph-adapter/src/index.ts",
+      "owner": "ROADMAP:phase-2"
+    },
+    {
+      "symbol": "startCallbackServerAndOpenBrowser",
+      "file": "codex-auth/src/index.ts",
+      "owner": "ROADMAP:phase-2"
+    },
+    {
+      "symbol": "exchangeCode",
+      "file": "codex-auth/src/index.ts",
+      "owner": "ROADMAP:phase-2"
+    },
+    {
+      "symbol": "refresh",
+      "file": "codex-auth/src/index.ts",
+      "owner": "ROADMAP:phase-2"
+    },
+    {
+      "symbol": "loadAuth",
+      "file": "codex-auth/src/index.ts",
+      "owner": "ROADMAP:phase-2"
+    },
+    {
+      "symbol": "saveAuth",
+      "file": "codex-auth/src/index.ts",
+      "owner": "ROADMAP:phase-2"
+    },
+    {
+      "symbol": "detectPhase",
+      "file": "context-manager/src/index.ts",
+      "owner": "ROADMAP:phase-2"
+    },
+    {
+      "symbol": "requiredContextSections",
+      "file": "context-manager/src/index.ts",
+      "owner": "ROADMAP:phase-2"
+    },
+    {
+      "symbol": "requiredContextSections",
+      "file": "context-manager/src/index.ts",
+      "owner": "ROADMAP:phase-2"
+    },
+    {
+      "symbol": "requiredContextSections",
+      "file": "context-manager/src/index.ts",
+      "owner": "ROADMAP:phase-2"
+    },
+    {
+      "symbol": "producePatchProposal",
+      "file": "developer-runtime/src/index.ts",
+      "owner": "ROADMAP:phase-2"
+    },
+    {
+      "symbol": "consolidate",
+      "file": "failure-bank/src/index.ts",
+      "owner": "ROADMAP:phase-2"
+    },
+    {
+      "symbol": "loadBank",
+      "file": "failure-bank/src/index.ts",
+      "owner": "ROADMAP:phase-2"
+    },
+    {
+      "symbol": "saveBank",
+      "file": "failure-bank/src/index.ts",
+      "owner": "ROADMAP:phase-2"
+    },
+    {
+      "symbol": "writeCheckpoint",
+      "file": "harness-core/src/index.ts",
+      "owner": "STORY-002.1"
+    },
+    {
+      "symbol": "rollbackWorkspace",
+      "file": "harness-core/src/index.ts",
+      "owner": "STORY-002.1"
+    },
+    {
+      "symbol": "createPlanningBundle",
+      "file": "planning-steward/src/index.ts",
+      "owner": "ROADMAP:phase-2"
+    },
+    {
+      "symbol": "buildStoryGraph",
+      "file": "planning-steward/src/index.ts",
+      "owner": "STORY-000.4"
+    },
+    {
+      "symbol": "runPreflight",
+      "file": "preflight-runner/src/index.ts",
+      "owner": "ROADMAP:phase-2"
+    },
+    {
+      "symbol": "runSkillTests",
+      "file": "skill-tester/src/index.ts",
+      "owner": "ROADMAP:phase-2"
+    },
+    {
+      "symbol": "robustnessCheck",
+      "file": "skill-tester/src/index.ts",
+      "owner": "ROADMAP:phase-2"
+    },
+    {
+      "symbol": "leakageAudit",
+      "file": "skill-tester/src/index.ts",
+      "owner": "ROADMAP:phase-2"
+    },
+    {
+      "symbol": "registerSkill",
+      "file": "skill-tester/src/index.ts",
+      "owner": "ROADMAP:phase-2"
+    },
+    {
+      "symbol": "composeDeveloperTaskPacket",
+      "file": "supervisor-runtime/src/index.ts",
+      "owner": "STORY-002.3"
+    },
+    {
+      "symbol": "composeDebuggerTaskPacket",
+      "file": "supervisor-runtime/src/index.ts",
+      "owner": "STORY-002.3"
+    },
+    {
+      "symbol": "summarizeProgress",
+      "file": "supervisor-runtime/src/index.ts",
+      "owner": "STORY-002.3"
+    }
+  ]
+}

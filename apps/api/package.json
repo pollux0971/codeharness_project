@@ -1,0 +1,14 @@
+{
+  "name": "@codeharness/api",
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "fastify": "latest"
+  },
+  "devDependencies": {
+    "tsx": "latest"
+  }
+}

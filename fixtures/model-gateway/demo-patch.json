@@ -1,0 +1,9 @@
+{
+  "kind": "patch_proposal",
+  "proposal_id": "P-FIXTURE-001",
+  "story_id": "STORY-DEMO",
+  "contract_id": "C1",
+  "change_type": "MODIFY",
+  "changed_files": ["src/math.ts"],
+  "rollback_notes": "git checkout -- src/math.ts"
+}

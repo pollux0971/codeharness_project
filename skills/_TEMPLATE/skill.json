@@ -1,0 +1,18 @@
+{
+  "skill_id": "shared.example-skill",
+  "agent_role": "shared",
+  "description": "One-line statement of what this skill does and when to use it.",
+  "version": "0.1.0",
+  "status": "draft",
+  "entry_documents": ["SKILL.md"],
+  "scripts": ["scripts/run.py"],
+  "tests": ["tests/test_skill.py"],
+  "validation": ["pytest -q tests/"],
+  "memory_file": ".memory.md",
+  "depends_on": [],
+  "enhances": [],
+  "provenance": { "source_story": "", "source_trajectory": "", "created_by": "" },
+  "failure_signatures": [],
+  "last_evaluation": { "passed": 0, "total": 0, "fresh_runs": 0, "pass_rate": 0.0, "at": "" },
+  "leakage_audit": "unrun"
+}

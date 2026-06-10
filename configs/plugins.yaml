@@ -1,0 +1,14 @@
+# External plugins/integrations. These are NOT CodeHarness core skills — they are
+# third-party tools the platform can surface/launch. huashu-design is registered here.
+plugins:
+  - id: huashu-design
+    name: Huashu Design (花叔Design)
+    kind: design
+    external: true
+    source: skills.sh
+    install: "npx skills add alchaincyf/huashu-design"
+    license: MIT
+    description: >-
+      HTML-native hi-fi design skill — prototypes, slide decks, motion design, infographics.
+      Used as an external design plugin; not part of the CodeHarness agent skill graph.
+    triggers: [prototype, hi-fi mockup, slide deck, animation, infographic, design variations]

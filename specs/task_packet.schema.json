@@ -1,0 +1,254 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://codeharness.dev/specs/task_packet.schema.json",
+  "title": "TaskPacket",
+  "description": "The complete, structured work order the Supervisor composes for a Developer or Debugger. It REFERENCES a StoryContract (the enforceable source of truth) and adds the rendered task, the context packet, and the required outputs. The Permission Gateway enforces the referenced StoryContract's allowed_write_set / forbidden_actions \u2014 never the prose in this packet. A packet is never delivered with raw secrets, unrelated full logs, or unrestricted repo access.",
+  "type": "object",
+  "required": [
+    "packet_id",
+    "story_id",
+    "story_contract_ref",
+    "target_agent",
+    "context_packet",
+    "output_required"
+  ],
+  "properties": {
+    "packet_id": {
+      "type": "string",
+      "description": "e.g. TP-2026-001"
+    },
+    "story_id": {
+      "type": "string"
+    },
+    "story_contract_ref": {
+      "type": "string",
+      "description": "Ref to the StoryContract (story_contract.schema.json) this packet renders. allowed_write_set, forbidden_actions, acceptance_criteria, validation_commands, attempt_budget are owned by that contract; fields below are a rendered convenience copy and must not diverge from it."
+    },
+    "contract_version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Version of the referenced contract this packet was rendered from; bumps on scope revision."
+    },
+    "target_agent": {
+      "type": "string",
+      "enum": [
+        "developer",
+        "debugger"
+      ]
+    },
+    "context_packet": {
+      "type": "object",
+      "required": [
+        "include_refs",
+        "exclude_patterns"
+      ],
+      "properties": {
+        "include_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Artifact refs to include (story contract, relevant codegraph, prior debug summary, schemas)."
+        },
+        "exclude_patterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Must exclude raw secrets, unrelated full logs, other work's private traces, whole-repo dumps."
+        }
+      },
+      "additionalProperties": false
+    },
+    "output_required": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Structured outputs the agent must return."
+    }
+  },
+  "oneOf": [
+    {
+      "title": "DeveloperTaskPacket",
+      "properties": {
+        "target_agent": {
+          "const": "developer"
+        },
+        "task_title": {
+          "type": "string"
+        },
+        "task_goal": {
+          "type": "string"
+        },
+        "task_details": {
+          "type": "object",
+          "properties": {
+            "background": {
+              "type": "string"
+            },
+            "expected_behavior": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "non_goals": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "allowed_write_set": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Copy of the contract's write-set (Gateway enforces the contract)."
+        },
+        "forbidden_actions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "required_files": {
+          "type": "object",
+          "properties": {
+            "create": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "update": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "do_not_touch": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "validation_commands": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "acceptance_criteria": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "rollback_requirement": {
+          "type": "object",
+          "properties": {
+            "required": {
+              "type": "boolean"
+            },
+            "expected_content": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "task_title",
+        "task_goal",
+        "allowed_write_set",
+        "forbidden_actions",
+        "validation_commands",
+        "acceptance_criteria",
+        "rollback_requirement"
+      ]
+    },
+    {
+      "title": "DebuggerTaskPacket",
+      "properties": {
+        "target_agent": {
+          "const": "debugger"
+        },
+        "debug_goal": {
+          "type": "string"
+        },
+        "investigation_only": {
+          "type": "boolean",
+          "description": "True for human-issue intake: investigate/reproduce only, no repair until a reproducible defect is confirmed."
+        },
+        "failure_context": {
+          "type": "object",
+          "properties": {
+            "validation_report_ref": {
+              "type": "string"
+            },
+            "failed_command": {
+              "type": "string"
+            },
+            "failure_signature": {
+              "type": "string"
+            },
+            "failed_logs_ref": {
+              "type": "string"
+            },
+            "changed_files": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "current_patch_ref": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "allowed_repair_scope": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Repair confined to this scope; widening requires Supervisor + human approval (contract revision)."
+        },
+        "forbidden_actions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "required_analysis": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "failure_classification",
+            "root_cause",
+            "affected_subgraph",
+            "minimal_repair_plan",
+            "whether_scope_expansion_is_needed"
+          ]
+        }
+      },
+      "required": [
+        "debug_goal",
+        "failure_context",
+        "allowed_repair_scope"
+      ]
+    }
+  ]
+}

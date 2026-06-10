@@ -1,0 +1,28 @@
+openapi: 3.1.0
+info:
+  title: CodeHarness API
+  version: 0.1.0
+paths:
+  /health:
+    get:
+      responses:
+        '200':
+          description: ok
+  /ideas:
+    post:
+      summary: Create idea intake record
+      responses:
+        '202':
+          description: accepted
+  /runs/{runId}/events:
+    get:
+      summary: Stream or list trace events
+      parameters:
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: event stream

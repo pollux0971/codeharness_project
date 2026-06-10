@@ -1,0 +1,89 @@
+# Model provider registry.
+# Declares the LLM backends an agent can run on. INFRASTRUCTURE config, set by
+# the operator — agents never edit it. Credentials are NEVER stored here: each
+# provider references a Secret Broker handle (api_key) or an OAuth token store.
+# The gateway fetches the credential at call time; it never enters agent context.
+#
+# Two auth modes:
+#   api_key  — metered, billed per token, standard vendor endpoints.
+#   oauth    — ChatGPT subscription (Codex). Billed against the subscription,
+#              uses the Codex backend endpoint only, with request/param limits.
+#
+# Model strings change frequently — treat them as config and pin a snapshot
+# where the provider offers one.
+version: 2
+
+default_provider: codex            # see model_routing.yaml; codex (subscription) + third-party fallback
+
+providers:
+  # ---- Codex via ChatGPT subscription (OAuth) — DEFAULT ----
+  codex:
+    kind: openai_responses_codex
+    auth:
+      mode: oauth
+      handle: provider.codex.oauth        # Secret Broker manages the token store
+    endpoint: https://chatgpt.com/backend-api/codex/responses
+    # The OAuth token ONLY works against this endpoint, and the request must
+    # resemble a Codex CLI request (Codex system prompt) for OpenAI's auth check
+    # to pass. The robust path is to run the Codex CLI as the executor (it does
+    # this natively); the gateway path replicates it via a localhost proxy.
+    request_shape: codex_cli
+    billing: chatgpt_subscription
+    capabilities: { tool_use: true, json: true, streaming: true }
+    constraints:
+      - "temperature and several sampling params are not configurable"
+      - "shares rate limits with the ChatGPT web app"
+      - "cannot be used against api.openai.com (scopes are locked to the Codex client)"
+    terms: "Personal developer use only. Not for commercial API resale or multi-user service."
+    models:
+      - { name: gpt-5.5-codex, tier: strong, good_for: [agentic_coding, hard_patch] }
+      # subscription-available codex snapshots rotate; set the current one.
+
+  # ---- DeepSeek (api key) — primary third-party fallback ----
+  deepseek:
+    kind: openai_compatible
+    auth: { mode: api_key, handle: provider.deepseek.default }
+    base_url: https://api.deepseek.com     # OpenAI-compatible; Anthropic-compatible at /anthropic
+    api: chat_completions
+    capabilities: { tool_use: true, json: true, streaming: true, thinking: true }
+    models:
+      - { name: deepseek-v4-pro,   tier: strong, context: 1000000, good_for: [hard_patch, debug_root_cause] }
+      - { name: deepseek-v4-flash, tier: cheap,  context: 1000000, good_for: [patch, triage, summarize] }
+      # legacy deepseek-chat / deepseek-reasoner retire 2026-07-24 — do not use.
+
+  # ---- Generic third-party: any OpenAI-compatible endpoint ----
+  third_party_openai_compatible:
+    kind: openai_compatible
+    auth: { mode: api_key, handle: provider.openai_compatible.default }
+    base_url: https://YOUR-ENDPOINT/v1
+    api: chat_completions
+    capabilities: { tool_use: true, json: true, streaming: true }
+    models:
+      - { name: your-model-id, tier: mid, context: 128000, good_for: [patch] }
+
+  # ---- OpenAI Platform (api key, metered) — optional ----
+  openai:
+    kind: openai
+    auth: { mode: api_key, handle: provider.openai.default }
+    base_url: https://api.openai.com/v1
+    api: responses
+    capabilities: { tool_use: true, json: true, streaming: true }
+    models:
+      - { name: gpt-5.5,      tier: strong, context: 1000000, good_for: [hard_patch, agentic_coding] }
+      - { name: gpt-5.5-mini, tier: cheap,  context: 1000000, good_for: [triage, summarize] }
+
+  # ---- Anthropic (api key) — optional; add the handle to enable ----
+  anthropic:
+    kind: anthropic
+    auth: { mode: api_key, handle: provider.anthropic.default }
+    base_url: https://api.anthropic.com
+    api: messages
+    capabilities: { tool_use: true, json: true, streaming: true }
+    models:
+      - { name: claude-opus-4-8,   tier: strong, context: 200000, good_for: [hard_patch, planning] }
+      - { name: claude-sonnet-4-6, tier: mid,    context: 200000, good_for: [patch, supervision] }
+      - { name: claude-haiku-4-5,  tier: cheap,  context: 200000, good_for: [triage, summarize] }
+
+# OAuth login flow + caveats: docs/architecture/11_CODEX_OAUTH_LOGIN.md
+# Enabling a NEW provider for the first time is a human-gate event. For codex
+# OAuth, the human browser login IS that gate.

@@ -1,0 +1,10 @@
+default:
+  rootless: true
+  network: none
+  read_only_root: true
+  cap_drop: [ALL]
+  no_new_privileges: true
+  host_docker_socket: false
+  cpus: 2
+  memory: 4g
+  timeout_seconds: 600

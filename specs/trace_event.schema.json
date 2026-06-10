@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TraceEvent",
+  "type": "object",
+  "required": [
+    "event_id",
+    "run_id",
+    "type",
+    "timestamp"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string"
+    },
+    "run_id": {
+      "type": "string"
+    },
+    "type": {
+      "enum": [
+        "idea_event",
+        "planning_event",
+        "context_packet_event",
+        "agent_output_event",
+        "tool_request_event",
+        "permission_decision_event",
+        "execution_event",
+        "validation_event",
+        "approval_event",
+        "promotion_event",
+        "rollback_event"
+      ]
+    },
+    "timestamp": {
+      "type": "string"
+    },
+    "agent_role": {
+      "type": "string"
+    },
+    "artifact_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "payload": {
+      "type": "object"
+    }
+  }
+}

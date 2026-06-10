@@ -1,0 +1,183 @@
+# Machine-readable mirror of docs/architecture/02_RUNTIME_STATE_MACHINE.md
+# The /goal loop reads this to pick exactly one action per iteration.
+version: 1
+
+budgets:
+  attempt_budget_default: 3        # develop<->debug cycles per story
+  run_iteration_budget: 12         # stories attempted per /goal invocation
+  repeated_failure_threshold: 2    # same failure signature -> escalate
+
+states: [resume, select, contract, develop, validate, debug, checkpoint, gate, done]
+
+# Stops that end the run (write tracker, print resume summary)
+stop_actions: [stop_run, escalate_human, request_merge_review, request_promotion]
+
+# Evaluated top to bottom; first matching rule fires.
+rules:
+  - id: 1
+    from: resume
+    when: scope_freetext_without_backlog
+    action: route_idea_intake_then_stop
+  - id: 2
+    from: resume
+    when: run_budget_exhausted
+    action: stop_run
+    reason: run_iteration_budget
+  - id: 3
+    from: select
+    when: all_in_scope_done
+    action: stop_run
+    reason: complete
+  - id: 4
+    from: select
+    when: selectable_empty_with_remaining
+    guard: dependency_blocked
+    action: escalate_human
+    reason: blocked_dependency
+  - id: 5
+    from: select
+    when: story_selectable
+    guard: selection_rule
+    action: select_next_story
+    to: contract
+  - id: 6
+    from: contract
+    when: contract_missing_or_stale
+    guard: story_has_objective_writeset_acceptance
+    action: build_contract
+    to: develop
+  - id: 7
+    from: contract
+    when: story_underspecified
+    action: escalate_human
+    reason: underspecified_story
+  - id: 8
+    from: develop
+    when: attempts_below_budget
+    guard: paths_within_write_set
+    action: develop_patch
+    to: validate
+  - id: 9
+    from: develop
+    when: paths_outside_write_set
+    action: escalate_human
+    reason: scope_breach
+  - id: 10
+    from: validate
+    guard: workspace_only_no_secret_sudo_network
+    action: run_validation
+  - id: 11
+    from: validate
+    when: validators_pass_no_leak_in_write_set
+    action: mark_passed
+    to: checkpoint
+  - id: 12
+    from: validate
+    when: validator_failed
+    guard: attempts_below_budget
+    action: route_debugger
+    to: debug
+  - id: 13
+    from: validate
+    when: validator_failed
+    guard: attempts_at_budget
+    action: escalate_human
+    reason: attempt_budget_exhausted
+  - id: 14
+    from: debug
+    when: root_cause_in_scope
+    guard: repair_within_write_set
+    action: retry_develop
+    to: develop
+    increment_attempts: true
+  - id: 15
+    from: debug
+    when: needs_scope_expansion
+    action: escalate_human
+    reason: scope_expansion
+  - id: 16
+    from: debug
+    when: repeated_failure
+    action: escalate_human
+    reason: repeated_failure_cycle
+  - id: 17
+    from: checkpoint
+    when: story_passed
+    guard: rollback_present
+    action: checkpoint_story
+    to: select
+  - id: 18
+    from: checkpoint
+    when: all_checkpointed_merge_intended
+    action: request_merge_review
+  - id: 19
+    from: gate
+    when: trust_boundary_crossing
+    action: escalate_human
+    reason: boundary_crossing
+  - id: 20
+    from: done
+    action: stop_run
+
+# Forced escalation regardless of state (harness-detected, not agent-flagged)
+human_gate_triggers:
+  - stable_or_protected_path_mutation
+  - promotion
+  - secret_use
+  - sudo_or_privileged_host_op
+  - network_escalation
+  - irreversible_deletion
+  - policy_change
+  - container_profile_weakening
+  - exceed_story_write_set
+  - scope_expansion
+  - repeated_failure_cycle
+
+# --- Skill lifecycle (see docs/workflows/08_SKILL_LIFECYCLE_RUNTIME_WORKFLOW.md) ---
+skill_lifecycle:
+  budgets:
+    register_pass_rate: 1.0
+    robustness_runs: 5
+    quarantine_below: 0.8
+    iteration_budget: 3
+  rules:
+    - { from: skill_proposed, when: has_tests, guard: leakage_audit_pass, action: run_skill_tests }
+    - { from: skill_proposed, when: no_tests_or_leakage_fail, action: reject_skill }
+    - { from: skill_testing, when: tests_pass, guard: robustness_ok, action: register_skill }
+    - { from: skill_testing, when: tests_pass_low_robustness, action: quarantine_skill }
+    - { from: skill_testing, when: test_failed, guard: refine_below_budget, action: refine_skill, increment_attempts: true }
+    - { from: skill_testing, when: test_failed, guard: refine_at_budget, action: quarantine_skill, reason: skill_iteration_budget }
+    - { from: skill_registered, when: superseded, action: deprecate_skill }
+    - { from: any, when: promote_skill_to_stable, action: escalate_human, reason: boundary_crossing }
+
+# --- Model routing & fallback (see configs/model_routing.yaml) ---
+model_routing:
+  selection: config_driven           # agents do not choose their own backend
+  fallback_on: [rate_limit, provider_error, context_length_exceeded, timeout]
+  human_gate_on:
+    - first_enable_new_provider          # for codex, the browser sign-in
+    - model_token_budget_exceeded
+  oauth_relogin_on_expiry: true          # refresh-token death -> interactive browser re-login
+
+# --- Failure gene lifecycle ---
+failure_gene:
+  # 1. Production: Debugger emits a gene after every repair attempt.
+  production_rules:
+    - { from: debug, when: repair_proposed, action: emit_failure_gene, format: specs/failure_gene.schema.json }
+    - { from: debug, when: gene_emitted, action: bank_gene, via: "failure-bank.bankGene" }
+    - { from: debug, when: bank_full, action: consolidate_bank, via: "failure-bank.consolidate" }
+
+  # 2. Injection: Context Manager injects relevant AVOID warnings before developer turns.
+  injection_rules:
+    - { before: develop, action: inject_relevant_genes, via: "failure-bank.injectRelevant", max_genes: 5, format: avoid_only }
+    - { every_n_calls: 10, action: re_inject_matching_genes, reason: anti_rule_amnesia }
+
+  # 3. Escalation: a recurring gene overrides the remaining retry budget.
+  escalation_rules:
+    - { from: debug, when: matching_gene_consolidated_count_gte_2, action: escalate_human, reason: systemic_failure }
+
+  # 4. Consolidation: run when bank exceeds max_active_genes (see configs/failure_bank.yaml).
+  consolidation_rules:
+    - { when: bank_size_gt_max, action: consolidate_bank }
+    - { when: gene_resolved, action: archive_gene }
+    - { when: gene_superseded, action: archive_gene }

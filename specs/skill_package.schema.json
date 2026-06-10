@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SkillPackage",
+  "type": "object",
+  "required": [
+    "skill_id",
+    "agent_role",
+    "description",
+    "entry_documents",
+    "tests",
+    "version",
+    "status"
+  ],
+  "properties": {
+    "skill_id": {
+      "type": "string"
+    },
+    "agent_role": {
+      "enum": [
+        "planning_steward",
+        "supervisor",
+        "developer",
+        "debugger",
+        "shared"
+      ]
+    },
+    "description": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string",
+      "description": "semver; bump on every iteration"
+    },
+    "status": {
+      "enum": [
+        "draft",
+        "tested",
+        "registered",
+        "deprecated",
+        "quarantined"
+      ],
+      "description": "draft\u2192test\u2192registered; quarantined if robustness below threshold; deprecated when superseded"
+    },
+    "entry_documents": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "e.g. SKILL.md"
+    },
+    "scripts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "tests": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "description": "REQUIRED. Unit tests gating registration; run in disposable workspace."
+    },
+    "validation": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "memory_file": {
+      "type": "string",
+      "default": ".memory.md",
+      "description": "append-only per-skill compact warnings/lessons; surfaced with SKILL.md on load"
+    },
+    "depends_on": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "skill_ids this skill requires (typed edge: prerequisite)"
+    },
+    "enhances": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "skill_ids this skill improves (typed edge: enhancement)"
+    },
+    "provenance": {
+      "type": "object",
+      "properties": {
+        "source_story": {
+          "type": "string"
+        },
+        "source_trajectory": {
+          "type": "string"
+        },
+        "created_by": {
+          "type": "string"
+        }
+      }
+    },
+    "failure_signatures": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "compact keys of known failure modes (used to dedupe AVOID warnings)"
+    },
+    "last_evaluation": {
+      "type": "object",
+      "properties": {
+        "passed": {
+          "type": "integer"
+        },
+        "total": {
+          "type": "integer"
+        },
+        "fresh_runs": {
+          "type": "integer"
+        },
+        "pass_rate": {
+          "type": "number"
+        },
+        "at": {
+          "type": "string"
+        }
+      },
+      "description": "result of the most recent test + robustness run"
+    },
+    "leakage_audit": {
+      "enum": [
+        "pass",
+        "fail",
+        "unrun"
+      ],
+      "default": "unrun",
+      "description": "must not hardcode expected outputs, branch on task ids, or read ground-truth"
+    }
+  }
+}

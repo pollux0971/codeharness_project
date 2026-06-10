@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Conversation",
+  "description": "A run rendered as an ordered agent/harness dialogue, for display in the cockpit. Derived from the append-only trace.",
+  "type": "object",
+  "required": ["run_id", "messages"],
+  "properties": {
+    "run_id": { "type": "string" },
+    "story_id": { "type": "string" },
+    "messages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["seq", "from", "type", "summary"],
+        "properties": {
+          "seq": { "type": "integer" },
+          "from": { "enum": ["human", "planning_steward", "supervisor", "developer", "debugger", "harness", "permission_gateway", "validator"] },
+          "to": { "type": "string" },
+          "type": { "enum": ["idea", "planning_bundle", "story_contract", "task_packet", "patch_proposal", "preflight_report", "spec_conformance", "permission_decision", "validation_report", "failure_gene", "escalation", "checkpoint", "human_gate"] },
+          "summary": { "type": "string" },
+          "artifact_refs": { "type": "array", "items": { "type": "string" } },
+          "timestamp": { "type": "string" }
+        }
+      }
+    }
+  }
+}

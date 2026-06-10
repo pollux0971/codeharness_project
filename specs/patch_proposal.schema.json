@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PatchProposal",
+  "description": "Produced by the Developer in response to a StoryContract. One structural change only. The Developer cannot self-certify completion \u2014 the Validator decides.",
+  "type": "object",
+  "required": [
+    "proposal_id",
+    "story_id",
+    "contract_id",
+    "contract_version",
+    "summary",
+    "change_type",
+    "changed_files",
+    "patch_branch",
+    "postconditions_claimed",
+    "proposed_at",
+    "status"
+  ],
+  "properties": {
+    "proposal_id": {
+      "type": "string",
+      "description": "e.g. PP-STORY-003.1-001"
+    },
+    "story_id": {
+      "type": "string"
+    },
+    "contract_id": {
+      "type": "string",
+      "description": "Must match the contract that triggered this proposal"
+    },
+    "contract_version": {
+      "type": "integer"
+    },
+    "summary": {
+      "type": "string",
+      "maxLength": 300,
+      "description": "One paragraph: what changed and the single reason why"
+    },
+    "change_type": {
+      "enum": [
+        "REBIND",
+        "INSERT_PREREQ",
+        "SUBSTITUTE",
+        "REWIRE",
+        "BYPASS",
+        "new_impl"
+      ],
+      "description": "GRASP repair operator (or new_impl for greenfield). One type per proposal \u2014 never bundle."
+    },
+    "changed_files": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "All files touched. Must be a subset of allowed_write_set."
+    },
+    "patch_branch": {
+      "type": "string",
+      "description": "Workspace/story branch; never the main branch"
+    },
+    "patch_diff_path": {
+      "type": "string",
+      "description": "Optional: path to a .diff or .patch artifact"
+    },
+    "postconditions_claimed": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Acceptance criteria this proposal claims to meet. The Validator verifies \u2014 do NOT mark the story done here."
+    },
+    "validation_commands_run": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Validation commands the Developer ran locally before proposing"
+    },
+    "failure_gene": {
+      "$ref": "./failure_gene.schema.json",
+      "description": "If this is a Debugger repair, include the gene here. Null for normal Developer proposals."
+    },
+    "proposed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "enum": [
+        "proposed",
+        "applied",
+        "validated",
+        "rejected",
+        "rolled_back"
+      ]
+    }
+  }
+}

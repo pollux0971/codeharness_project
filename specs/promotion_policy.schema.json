@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PromotionPolicy",
+  "type": "object",
+  "required": [
+    "requires_human_approval",
+    "requires_trace",
+    "requires_rollback_plan",
+    "requires_no_secret_leak"
+  ],
+  "properties": {
+    "requires_human_approval": {
+      "type": "boolean"
+    },
+    "requires_trace": {
+      "type": "boolean"
+    },
+    "requires_rollback_plan": {
+      "type": "boolean"
+    },
+    "requires_no_secret_leak": {
+      "type": "boolean"
+    },
+    "required_validators": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

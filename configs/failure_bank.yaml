@@ -1,0 +1,26 @@
+# Warning bank governance parameters.
+# These are the operational numbers behind docs/failure_bank/README.md.
+# Change them to tune injection density and bank size.
+version: 1
+
+bank:
+  max_active_genes: 50             # above this, run consolidate() before adding new entries
+  archive_resolved_after_days: 30  # move resolved/superseded genes to archive after this many days
+
+injection:
+  max_genes_per_turn: 5            # cap on how many AVOID lines the Context Manager injects
+  injection_format: avoid_only     # inject only the `avoid` field, not summary/strategy/metadata
+  repeat_injection_every_n_calls: 10  # re-inject matching warnings every N LLM calls (anti rule-amnesia)
+  min_severity: warning            # only inject genes at or above this severity
+
+deduplication:
+  # A new failure is merged into an existing gene (rather than added as a new entry)
+  # when ANY pipe-delimited token of its matching_signal matches the existing gene's.
+  strategy: any_token_match
+  on_match: increment_consolidated_count   # + optionally strengthen the AVOID field
+
+escalation:
+  # When a failure's matching_signal fires and the matching gene already has
+  # consolidated_count >= this threshold, treat it as a systemic pattern and
+  # escalate more aggressively (skip the remaining retry budget).
+  recurring_pattern_threshold: 2

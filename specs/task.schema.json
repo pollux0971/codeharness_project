@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Task",
+  "description": "A small, verifiable subtask Developer/Debugger create WITHIN a StoryContract to raise per-step success. A subtask inherits and may NEVER widen the parent contract's write-set/forbidden actions.",
+  "type": "object",
+  "required": [
+    "task_id",
+    "parent_story_id",
+    "parent_contract_id",
+    "intent",
+    "status",
+    "sequence",
+    "depends_on",
+    "files_touched",
+    "created_by",
+    "attempt_count",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "task_id": {
+      "type": "string"
+    },
+    "parent_story_id": {
+      "type": "string"
+    },
+    "parent_contract_id": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "intent": {
+      "type": "string",
+      "description": "one testable sentence"
+    },
+    "status": {
+      "enum": [
+        "pending",
+        "in_progress",
+        "blocked",
+        "done",
+        "abandoned"
+      ]
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "depends_on": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "task_ids in the same parent that must be done first"
+    },
+    "files_touched": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "MUST be a subset of the parent contract allowed_write_set"
+    },
+    "acceptance_behavior": {
+      "type": "string",
+      "description": "optional behavior id this subtask satisfies"
+    },
+    "created_by": {
+      "enum": [
+        "developer",
+        "debugger"
+      ]
+    },
+    "attempt_count": {
+      "type": "integer",
+      "default": 0
+    },
+    "notes": {
+      "type": "string"
+    },
+    "result_ref": {
+      "type": "string",
+      "description": "trace/artifact ref for the subtask result"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "updated_at": {
+      "type": "string"
+    }
+  }
+}

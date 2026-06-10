@@ -1,0 +1,245 @@
+// Orchestrator — CodeHarness inner-loop state machine engine.
+//
+// Responsibilities:
+//   1. Drive story state transitions (tick)
+//   2. Select the next story respecting the dependency DAG (selectNextStory)
+//   3. Enforce attempt and run budgets (enforceAttemptBudget, enforceRunBudget)
+//   4. Detect human gate triggers deterministically (checkHumanGate)
+//   5. Record checkpoints and rollback (checkpoint, rollback)
+//
+// Nothing here is an LLM. Every decision is deterministic and auditable.
+
+// ── Types ────────────────────────────────────────────────────────────────────
+
+export type StoryStatus =
+  | 'todo' | 'in_progress' | 'validating' | 'debugging'
+  | 'passed' | 'checkpointed' | 'blocked' | 'escalated' | 'done';
+
+export type HarnessState =
+  | 'IDEA_INBOX' | 'PLANNING_BUNDLE' | 'SUPERVISOR_CONTRACT'
+  | 'DEVELOPER_PATCH_PROPOSAL' | 'DEVELOPER_PREFLIGHT' | 'SPEC_CONFORMANCE_REVIEW'
+  | 'WORKSPACE_APPLY' | 'VALIDATION'
+  | 'DEBUG_LOOP' | 'CHECKPOINT' | 'HUMAN_GATE' | 'PROMOTION_REVIEW' | 'DONE';
+
+export type OrchestratorAction =
+  | 'run_bootstrap'          // Step 0: capture env snapshot
+  | 'select_story'           // pick next story from DAG
+  | 'issue_contract'         // Supervisor issues StoryContract
+  | 'request_patch'          // Developer turn
+  | 'apply_patch'            // Tool Executor applies the proposal to the workspace branch
+  | 'run_validation'         // Validator runs validation_commands
+  | 'route_debugger'         // hand to Debugger on failure
+  | 'retry_develop'          // back to Developer after a repair
+  | 'write_checkpoint'       // save state; mark story checkpointed
+  | 'escalate_human'         // stop + ask; never continue until human responds
+  | 'rollback_workspace'     // revert the workspace branch to the pre-story snapshot
+  | 'mark_story_done'        // story is done; update tracker
+  | 'stop_run';              // run budget exhausted or stop condition fired
+
+export type HumanGateReason =
+  | 'scope_expansion'        // repair requires writing outside allowed_write_set
+  | 'attempt_budget_exceeded'// max develop<->debug cycles exhausted
+  | 'run_budget_exceeded'    // max stories for this /goal run exhausted
+  | 'systemic_failure'       // failure gene consolidated_count >= threshold
+  | 'stable_mutation'        // writing to protected/production path
+  | 'promotion'              // promoting from workspace to main
+  | 'first_enable_provider'  // first use of a new model provider
+  | 'policy_change'          // any change to policy.yaml or decision_matrix
+  | 'sudo_or_irreversible';  // any sudo / rm -rf / destructive command
+
+// ── Legal transitions ─────────────────────────────────────────────────────────
+
+const TRANSITIONS: Record<HarnessState, HarnessState[]> = {
+  IDEA_INBOX:              ['PLANNING_BUNDLE'],
+  PLANNING_BUNDLE:         ['SUPERVISOR_CONTRACT'],
+  SUPERVISOR_CONTRACT:     ['DEVELOPER_PATCH_PROPOSAL'],
+  DEVELOPER_PATCH_PROPOSAL:['DEVELOPER_PREFLIGHT', 'HUMAN_GATE'],          // preflight next, or escalate instead of guessing
+  DEVELOPER_PREFLIGHT:     ['SPEC_CONFORMANCE_REVIEW', 'DEVELOPER_PATCH_PROPOSAL', 'HUMAN_GATE'], // advisory: pass→conformance, self-correct (bounded), or escalate
+  SPEC_CONFORMANCE_REVIEW: ['WORKSPACE_APPLY', 'DEVELOPER_PATCH_PROPOSAL', 'HUMAN_GATE'],          // HARD gate: pass→apply, fix proposal, or escalate
+  WORKSPACE_APPLY:         ['VALIDATION'],
+  VALIDATION:              ['DEBUG_LOOP', 'CHECKPOINT', 'HUMAN_GATE'],
+  DEBUG_LOOP:              ['DEVELOPER_PATCH_PROPOSAL', 'SUPERVISOR_CONTRACT', 'HUMAN_GATE'],
+  CHECKPOINT:              ['PROMOTION_REVIEW', 'SUPERVISOR_CONTRACT'],  // next story or promote
+  HUMAN_GATE:              ['SUPERVISOR_CONTRACT', 'CHECKPOINT', 'DONE'],
+  PROMOTION_REVIEW:        ['DONE', 'HUMAN_GATE'],
+  DONE:                    [],
+};
+
+export function canTransition(from: HarnessState, to: HarnessState): boolean {
+  return TRANSITIONS[from]?.includes(to) ?? false;
+}
+
+// ── Story record (mirrors tracker_state.json.stories[n]) ─────────────────────
+
+export interface StoryRecord {
+  story_id: string;
+  epic_id: string;
+  depends_on: string[];
+  parallelism_class: 'parallel_safe' | 'parallel_with_barrier' | 'sequential' | 'exclusive';
+  status: StoryStatus;
+  attempts: number;
+  attempt_budget: number;
+  branch: string | null;
+  last_action: string | null;
+  last_result: string | null;
+  last_validation: string | null;
+  blocked_reason: string | null;
+}
+
+export interface RunBudget {
+  run_iteration_budget: number;
+  iterations_used: number;
+}
+
+// ── Story selection (DAG-aware) ───────────────────────────────────────────────
+
+/**
+ * Return the story_id that should run next, or null if nothing is runnable.
+ * Rules:
+ *  1. All depends_on stories must be 'done'.
+ *  2. Status must be 'todo' (or 'blocked' being retried after a human clears it).
+ *  3. Among candidates, prefer lower epic_id then lower story_id (stable ordering).
+ *  4. 'exclusive' stories block all parallel work; wait until they are done.
+ */
+export function selectNextStory(stories: StoryRecord[]): string | null {
+  const done = new Set(stories.filter(s => s.status === 'done').map(s => s.story_id));
+  const hasExclusiveRunning = stories.some(
+    s => s.parallelism_class === 'exclusive' && s.status === 'in_progress'
+  );
+  if (hasExclusiveRunning) return null;
+
+  const candidates = stories.filter(s =>
+    (s.status === 'todo') &&
+    s.depends_on.every(dep => done.has(dep))
+  );
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => a.epic_id.localeCompare(b.epic_id) || a.story_id.localeCompare(b.story_id));
+  return candidates[0].story_id;
+}
+
+// ── Budget enforcement ────────────────────────────────────────────────────────
+
+export function enforceAttemptBudget(
+  story: StoryRecord
+): 'ok' | 'escalate' {
+  return story.attempts < story.attempt_budget ? 'ok' : 'escalate';
+}
+
+export function enforceRunBudget(budget: RunBudget): 'ok' | 'stop' {
+  return budget.iterations_used < budget.run_iteration_budget ? 'ok' : 'stop';
+}
+
+// ── Human gate detection (deterministic — never trusts agent self-report) ─────
+
+/** Returns the gate reason if the proposed action requires human approval, or null. */
+export function checkHumanGate(
+  action: OrchestratorAction,
+  story: StoryRecord,
+  context: { changedFiles?: string[]; allowedWriteSet?: string[]; isPromotion?: boolean }
+): HumanGateReason | null {
+  if (action === 'escalate_human') return 'attempt_budget_exceeded'; // already decided upstream
+  if (context.isPromotion) return 'promotion';
+  if (action === 'apply_patch' && context.changedFiles && context.allowedWriteSet) {
+    const outside = context.changedFiles.filter(f =>
+      !context.allowedWriteSet!.some(pattern => matchesGlob(f, pattern))
+    );
+    if (outside.length > 0) return 'scope_expansion';
+  }
+  if (story.blocked_reason?.startsWith('systemic_failure')) return 'systemic_failure';
+  return null;
+}
+
+// ── Core tick ────────────────────────────────────────────────────────────────
+
+export interface TickInput {
+  state: HarnessState;
+  story: StoryRecord;
+  runBudget: RunBudget;
+  lastValidationPassed: boolean | null;
+  humanGateCleared: boolean;
+}
+
+/**
+ * Single-step the orchestrator: given the current state and story, return
+ * the next action. Pure function — no side effects.
+ */
+export function tick(input: TickInput): OrchestratorAction {
+  const { state, story, runBudget, lastValidationPassed, humanGateCleared } = input;
+
+  if (enforceRunBudget(runBudget) === 'stop') return 'stop_run';
+
+  switch (state) {
+    case 'SUPERVISOR_CONTRACT':    return 'issue_contract';
+    case 'DEVELOPER_PATCH_PROPOSAL': return 'request_patch';
+    case 'WORKSPACE_APPLY':        return 'apply_patch';
+
+    case 'VALIDATION':
+      if (lastValidationPassed === true)  return 'write_checkpoint';
+      if (lastValidationPassed === false) {
+        return enforceAttemptBudget(story) === 'ok' ? 'route_debugger' : 'escalate_human';
+      }
+      return 'run_validation';
+
+    case 'DEBUG_LOOP':
+      return enforceAttemptBudget(story) === 'ok' ? 'retry_develop' : 'escalate_human';
+
+    case 'CHECKPOINT':
+      return 'mark_story_done';
+
+    case 'HUMAN_GATE':
+      return humanGateCleared ? 'select_story' : 'stop_run';
+
+    case 'PROMOTION_REVIEW':
+      return 'escalate_human';   // promotion always requires human approval
+
+    default:
+      return 'stop_run';
+  }
+}
+
+// ── Checkpoint + rollback primitives (stubs) ──────────────────────────────────
+
+export interface CheckpointRecord {
+  story_id: string;
+  branch: string;
+  commit_sha: string;
+  checkpointed_at: string;
+}
+
+export async function writeCheckpoint(_story: StoryRecord): Promise<CheckpointRecord> {
+  throw new Error('not implemented: git tag + tracker write');
+}
+
+export async function rollbackWorkspace(_story: StoryRecord): Promise<void> {
+  throw new Error('not implemented: git checkout to pre-story branch, clean workspace');
+}
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
+
+/** Minimal glob matcher (supports ** and * wildcards). */
+function matchesGlob(path: string, pattern: string): boolean {
+  const re = new RegExp('^' + pattern.replace(/\*\*/g,'___DSTAR___').replace(/\*/g,'[^/]*').replace(/___DSTAR___/g,'.*') + '$');
+  return re.test(path);
+}
+
+// ── Orchestrator v0 public API (STORY-001) ────────────────────────────────────
+// Re-exported so consumers can import from @codeharness/harness-core without
+// reaching into internal source paths.
+
+export {
+  selectNextRuntimeStory,
+  hasBlockedOrEscalatedDependency,
+  decideNextAction,
+  advanceTrackerState,
+  buildResumeSummary,
+} from './orchestrator-v0.ts';
+
+export type {
+  TrackerState,
+  RuntimeStory,
+  RuntimeDecision,
+  ActionResult,
+  OrchestratorV0State,
+  OrchestratorV0Action,
+  RuntimeStoryStatus,
+} from './orchestrator-v0.ts';

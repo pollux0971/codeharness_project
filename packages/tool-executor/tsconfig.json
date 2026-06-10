@@ -1,0 +1,7 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "composite": true, "rootDir": "src", "outDir": "dist" },
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.test.ts", "dist"],
+  "references": [{ "path": "../permission-gateway" }, { "path": "../workspace-manager" }, { "path": "../validator-suite" }]
+}

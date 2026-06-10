@@ -1,0 +1,25 @@
+{
+  "skill_id": "planning-steward.program-spec-assembly",
+  "agent_role": "planning_steward",
+  "description": "Assemble the six spec-skill outputs into one machine-facing bundle and verify cross-artifact consistency (behavior-id set equality across acceptance/test/contract, stubs registered, guards present, acceptance-test integrity).",
+  "version": "0.1.0",
+  "status": "needs_tests",
+  "entry_documents": ["SKILL.md"],
+  "scripts": ["scripts/evaluate.py"],
+  "tests": ["tests/test_skill.py"],
+  "validation": ["pytest -q tests/"],
+  "memory_file": ".memory.md",
+  "depends_on": [
+    "planning-steward.behavior-test-derivation",
+    "planning-steward.machine-checkable-acceptance",
+    "planning-steward.acceptance-test-scaffold",
+    "planning-steward.interface-contract-spec",
+    "planning-steward.write-set-and-guards",
+    "planning-steward.documented-stub-registry"
+  ],
+  "enhances": ["supervisor.story-contract"],
+  "provenance": { "source_story": "", "source_trajectory": "machine-facing-spec lesson", "created_by": "harness" },
+  "failure_signatures": ["behavior|drift", "unregistered|stub", "integrity|author"],
+  "last_evaluation": { "passed": 0, "total": 0, "fresh_runs": 0, "pass_rate": 0.0, "at": "" },
+  "leakage_audit": "unrun"
+}

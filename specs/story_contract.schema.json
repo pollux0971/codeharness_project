@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "StoryContract",
+  "description": "Issued by the Supervisor to gate a story. The Developer must not begin patch work without a valid contract. This is the inner loop's starting gun.",
+  "type": "object",
+  "required": [
+    "contract_id",
+    "contract_version",
+    "story_id",
+    "epic_id",
+    "task_class",
+    "objective",
+    "pre_conditions",
+    "allowed_write_set",
+    "forbidden_actions",
+    "acceptance_criteria",
+    "validation_commands",
+    "attempt_budget",
+    "rollback_notes",
+    "contract_issued_at"
+  ],
+  "properties": {
+    "contract_id": {
+      "type": "string",
+      "description": "e.g. SC-STORY-003.1-v1"
+    },
+    "contract_version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Bump when the Supervisor reissues after scope change"
+    },
+    "story_id": {
+      "type": "string"
+    },
+    "epic_id": {
+      "type": "string"
+    },
+    "task_class": {
+      "enum": [
+        "greenfield",
+        "brownfield",
+        "patch",
+        "checkpoint",
+        "research_spike"
+      ],
+      "description": "Used by the Model Provider Gateway for cost-aware routing"
+    },
+    "objective": {
+      "type": "string",
+      "maxLength": 400,
+      "description": "One paragraph: what done looks like"
+    },
+    "pre_conditions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "All of these must be true before the Developer starts. Orchestrator verifies."
+    },
+    "depends_on": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "story_ids that must be 'done'"
+    },
+    "parallelism_class": {
+      "enum": [
+        "parallel_safe",
+        "parallel_with_barrier",
+        "sequential",
+        "exclusive"
+      ]
+    },
+    "allowed_write_set": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Glob patterns. The Permission Gateway enforces this; the Developer cannot write outside it."
+    },
+    "forbidden_actions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "allowed_tools": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "acceptance_criteria": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "description": "Testable criteria. The Validator checks these; the Developer cannot self-certify completion."
+    },
+    "validation_commands": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "description": "Exact commands the Validator runs. Must be deterministic and exit-code reliable."
+    },
+    "required_validators": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "attempt_budget": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 3,
+      "description": "Max develop<->debug cycles. Orchestrator enforces this; the Developer cannot override."
+    },
+    "human_gate_required_for": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Boundary crossings that force escalate_human. Detected deterministically by the Orchestrator."
+    },
+    "rollback_notes": {
+      "type": "string",
+      "description": "How to undo this story's changes if validation fails"
+    },
+    "failure_gene_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Active warning bank gene ids whose matching_signal fired for this story's context. Injected before the first Developer turn."
+    },
+    "env_snapshot_ref": {
+      "type": "string",
+      "description": "Path to the env snapshot captured at loop start",
+      "default": "artifacts/env_snapshot.json"
+    },
+    "context_impact": {
+      "type": "string",
+      "description": "Expected effect on context window size (tokens)"
+    },
+    "estimated_complexity": {
+      "enum": [
+        "trivial",
+        "small",
+        "medium",
+        "large",
+        "xlarge"
+      ]
+    },
+    "contract_issued_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "promotion_allowed": {
+      "type": "boolean",
+      "default": false
+    }
+  }
+}

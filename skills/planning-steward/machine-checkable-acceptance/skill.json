@@ -1,0 +1,18 @@
+{
+  "skill_id": "planning-steward.machine-checkable-acceptance",
+  "agent_role": "planning_steward",
+  "description": "Author acceptance criteria as machine-checkable files_must_exist / behaviors_must_pass / commands_must_pass; behavior ids equal the vitest it() names. Reject prose.",
+  "version": "0.1.0",
+  "status": "needs_tests",
+  "entry_documents": ["SKILL.md"],
+  "scripts": ["scripts/evaluate.py"],
+  "tests": ["tests/test_skill.py"],
+  "validation": ["pytest -q tests/"],
+  "memory_file": ".memory.md",
+  "depends_on": [],
+  "enhances": ["planning-steward.epic-story-sharding", "supervisor.story-contract"],
+  "provenance": { "source_story": "", "source_trajectory": "machine-facing-spec lesson", "created_by": "harness" },
+  "failure_signatures": ["prose|acceptance", "behavior|not|snake_case"],
+  "last_evaluation": { "passed": 0, "total": 0, "fresh_runs": 0, "pass_rate": 0.0, "at": "" },
+  "leakage_audit": "unrun"
+}

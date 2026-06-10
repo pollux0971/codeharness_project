@@ -1,0 +1,20 @@
+{
+  "name": "codeharness-planning-pack",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc -b --pretty false",
+    "walk": "node --experimental-strip-types scripts/walking-skeleton.ts",
+    "ci": "tsc -b --pretty false && vitest run && python3 -m pytest -q skills/"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Escalation",
+  "description": "Structured escalation an agent emits instead of guessing when blocked/ambiguous. Prevents self-widening scope, deleting tests, or hallucinating context.",
+  "type": "object",
+  "required": ["type", "reason", "requested_decision"],
+  "properties": {
+    "type": { "enum": ["needs_clarification", "needs_scope_expansion", "blocked_by_missing_context", "blocked_by_policy", "repeated_failure"] },
+    "reason": { "type": "string" },
+    "evidence_refs": { "type": "array", "items": { "type": "string" }, "description": "trace/artifact refs supporting the escalation" },
+    "requested_decision": { "type": "string", "description": "the specific decision the human/Supervisor must make" },
+    "options": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["option_id", "tradeoff"],
+        "properties": { "option_id": { "type": "string" }, "tradeoff": { "type": "string" } }
+      }
+    },
+    "raised_by": { "enum": ["developer", "debugger"] },
+    "story_id": { "type": "string" }
+  }
+}

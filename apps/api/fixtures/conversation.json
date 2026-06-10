@@ -1,0 +1,17 @@
+{
+  "run_id": "run_sample_001",
+  "story_id": "STORY-003.1",
+  "sample": true,
+  "messages": [
+    { "seq": 0, "from": "human", "to": "planning_steward", "type": "idea", "summary": "Implement the Permission Gateway MVP.", "timestamp": "2026-06-09T09:00:00Z" },
+    { "seq": 1, "from": "planning_steward", "to": "supervisor", "type": "story_contract", "summary": "STORY-003.1 contract issued: write-set packages/permission-gateway/src/**, 22 machine-checkable behaviors.", "artifact_refs": ["story_contract#STORY-003.1"], "timestamp": "2026-06-09T09:01:10Z" },
+    { "seq": 2, "from": "supervisor", "to": "developer", "type": "task_packet", "summary": "Developer Task Packet: implement allow/ask/deny pipeline; decompose first.", "artifact_refs": ["task_packet#1"], "timestamp": "2026-06-09T09:01:40Z" },
+    { "seq": 3, "from": "developer", "to": "harness", "type": "patch_proposal", "summary": "Proposal: ADD evaluateToolRequest pipeline (changed_files: permission-gateway/src/index.ts).", "artifact_refs": ["patch_proposal#1"], "timestamp": "2026-06-09T09:06:20Z" },
+    { "seq": 4, "from": "developer", "to": "harness", "type": "preflight_report", "summary": "Pre-flight: typecheck ok, affected tests 20/22; self-corrected once → 22/22. verdict: submit.", "artifact_refs": ["preflight#1"], "timestamp": "2026-06-09T09:08:05Z" },
+    { "seq": 5, "from": "harness", "to": "developer", "type": "spec_conformance", "summary": "Spec-conformance gate PASS: schema valid, changed_files ⊆ write-set, acceptance machine-checkable, rollback present.", "timestamp": "2026-06-09T09:08:20Z" },
+    { "seq": 6, "from": "permission_gateway", "to": "harness", "type": "permission_decision", "summary": "allow: write inside disposable workspace (registry-confirmed).", "timestamp": "2026-06-09T09:08:25Z" },
+    { "seq": 7, "from": "validator", "to": "supervisor", "type": "validation_report", "summary": "PASS: pnpm test permission-gateway → 22/22 behaviors green.", "artifact_refs": ["validation_report#1"], "timestamp": "2026-06-09T09:09:40Z" },
+    { "seq": 8, "from": "supervisor", "to": "harness", "type": "checkpoint", "summary": "Checkpoint drafted; awaiting human merge (apply ≠ promotion).", "timestamp": "2026-06-09T09:09:55Z" },
+    { "seq": 9, "from": "harness", "to": "human", "type": "human_gate", "summary": "Human gate: review + merge STORY-003.1.", "timestamp": "2026-06-09T09:10:00Z" }
+  ]
+}

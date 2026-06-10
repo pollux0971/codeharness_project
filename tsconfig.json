@@ -1,0 +1,68 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "packages/agent-output"
+    },
+    {
+      "path": "packages/codegraph-adapter"
+    },
+    {
+      "path": "packages/codex-auth"
+    },
+    {
+      "path": "packages/context-manager"
+    },
+    {
+      "path": "packages/debugger-runtime"
+    },
+    {
+      "path": "packages/developer-runtime"
+    },
+    {
+      "path": "packages/event-log"
+    },
+    {
+      "path": "packages/failure-bank"
+    },
+    {
+      "path": "packages/harness-core"
+    },
+    {
+      "path": "packages/model-gateway"
+    },
+    {
+      "path": "packages/permission-gateway"
+    },
+    {
+      "path": "packages/planning-steward"
+    },
+    {
+      "path": "packages/preflight-runner"
+    },
+    {
+      "path": "packages/shared"
+    },
+    {
+      "path": "packages/skill-runtime"
+    },
+    {
+      "path": "packages/skill-tester"
+    },
+    {
+      "path": "packages/supervisor-runtime"
+    },
+    {
+      "path": "packages/task-graph"
+    },
+    {
+      "path": "packages/validator-suite"
+    },
+    {
+      "path": "packages/workspace-manager"
+    },
+    {
+      "path": "packages/tool-executor"
+    }
+  ]
+}

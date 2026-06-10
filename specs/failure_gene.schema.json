@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FailureGene",
+  "description": "A compact, control-oriented record of a validated failure pattern. Produced by the Debugger after a repair succeeds, stored in the warning bank, and injected (AVOID-only) into the Developer's context before high-risk turns. Inspired by GEP (Strategy Genes) and Evolver: keep it ~100 tokens, AVOID is the operative field. Selective, not additive \u2014 dedupe by matching_signal.",
+  "type": "object",
+  "required": [
+    "id",
+    "matching_signal",
+    "summary",
+    "strategy",
+    "avoid",
+    "failure_type",
+    "severity",
+    "story_id",
+    "version",
+    "created_at",
+    "status"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "e.g. fg-2026-06-07-001; unique, immutable after first write"
+    },
+    "matching_signal": {
+      "type": "string",
+      "description": "Lightweight match spec used for deduplication and injection filtering. Pipe-separated key:value tokens \u2014 ANY token match is a hit. e.g. 'file:src/core/** | error:circular_import | task:refactor'"
+    },
+    "summary": {
+      "type": "string",
+      "maxLength": 200,
+      "description": "One sentence: what failed and where."
+    },
+    "strategy": {
+      "type": "string",
+      "maxLength": 300,
+      "description": "One sentence: what approach resolved it or should be tried."
+    },
+    "avoid": {
+      "type": "string",
+      "maxLength": 200,
+      "description": "THE operative field injected into Developer context. Imperative, \u226440 words. 'Do NOT X' or 'NEVER Y without Z'. This is what the model sees \u2014 keep it compact and specific."
+    },
+    "failure_type": {
+      "enum": [
+        "test_failure",
+        "build_error",
+        "type_error",
+        "runtime_error",
+        "validation_fail",
+        "regression",
+        "timeout",
+        "scope_error",
+        "skill_failure",
+        "unknown"
+      ]
+    },
+    "repair_operator": {
+      "enum": [
+        "REBIND",
+        "INSERT_PREREQ",
+        "SUBSTITUTE",
+        "REWIRE",
+        "BYPASS",
+        "none"
+      ],
+      "description": "The GRASP repair operator that resolved this failure (or 'none'). Helps the Debugger pick the right operator if this pattern recurs."
+    },
+    "story_id": {
+      "type": "string",
+      "description": "Origin story (e.g. STORY-003.1)"
+    },
+    "skill_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null,
+      "description": "If failure is tied to a specific skill; otherwise null. Skill-level lessons also go to that skill's .memory.md."
+    },
+    "severity": {
+      "enum": [
+        "fatal",
+        "recoverable",
+        "warning"
+      ],
+      "description": "fatal = blocked the story; recoverable = repaired in-run; warning = noted for future prevention"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Bump on each consolidation or manual edit. The schema is editable \u2014 do not grow it, revise it."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "consolidated_count": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1,
+      "description": "How many distinct failure events have been merged into this gene. consolidated_count >= 2 means it is a recurring pattern \u2014 escalate earlier."
+    },
+    "resolved_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time",
+      "default": null
+    },
+    "status": {
+      "enum": [
+        "active",
+        "resolved",
+        "superseded"
+      ],
+      "description": "active = still relevant; resolved = root cause fixed; superseded = replaced by a more general gene"
+    }
+  },
+  "examples": [
+    {
+      "id": "fg-2026-06-07-001",
+      "matching_signal": "file:src/core/** | error:circular_import | task:refactor",
+      "summary": "Circular import in the core layer after adding an index.ts barrel export during a refactor.",
+      "strategy": "Audit all imports top-down before adding barrel exports; run `tsc --noEmit` as the first validation step.",
+      "avoid": "Do NOT add index.ts barrel exports without first verifying no circular imports exist with `madge --circular`.",
+      "failure_type": "build_error",
+      "repair_operator": "INSERT_PREREQ",
+      "story_id": "STORY-003.1",
+      "skill_id": null,
+      "severity": "recoverable",
+      "version": 1,
+      "created_at": "2026-06-07T10:00:00Z",
+      "consolidated_count": 1,
+      "resolved_at": null,
+      "status": "active"
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "HarnessContract",
+  "type": "object",
+  "required": [
+    "contract_id",
+    "story_id",
+    "objective",
+    "mode",
+    "allowed_write_set",
+    "validation_commands",
+    "promotion_allowed"
+  ],
+  "properties": {
+    "contract_id": {
+      "type": "string"
+    },
+    "story_id": {
+      "type": "string"
+    },
+    "objective": {
+      "type": "string"
+    },
+    "mode": {
+      "enum": [
+        "greenfield",
+        "brownfield",
+        "patch",
+        "checkpoint",
+        "research_spike"
+      ]
+    },
+    "allowed_write_set": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "forbidden_paths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "allowed_tools": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "validation_commands": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "rollback_plan_required": {
+      "type": "boolean"
+    },
+    "promotion_allowed": {
+      "type": "boolean"
+    },
+    "human_gate_required_for": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

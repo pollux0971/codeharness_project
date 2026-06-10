@@ -1,0 +1,36 @@
+permission_modes:
+- plan
+- ask
+- accept_edits
+- bypass_workspace
+- deny_unlisted
+protected_paths:
+- .git
+- .env
+- .env.*
+- secrets/
+- ~/.ssh
+- ~/.config
+- node_modules/
+- dist/
+- reserved_patches/
+- ~/.codex
+- ~/.codex/auth.json
+secret_patterns:
+- OPENAI_API_KEY
+- ANTHROPIC_API_KEY
+- GITHUB_TOKEN
+- DEEPSEEK_API_KEY
+- CODEX_AUTH_JSON
+- CODEX_ACCESS_TOKEN
+hard_deny_commands:
+- rm -rf /
+- mkfs
+- dd if=
+- shutdown
+- reboot
+ask_commands:
+- sudo
+- curl
+- wget
+- chmod 777

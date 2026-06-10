@@ -1,0 +1,18 @@
+{
+  "skill_id": "planning-steward.write-set-and-guards",
+  "agent_role": "planning_steward",
+  "description": "Derive a minimal, glob-valid, parallel-disjoint allowed_write_set plus forbidden_actions containing the mandatory no-secret/no-sudo/no-real-api guards.",
+  "version": "0.1.0",
+  "status": "needs_tests",
+  "entry_documents": ["SKILL.md"],
+  "scripts": ["scripts/evaluate.py"],
+  "tests": ["tests/test_skill.py"],
+  "validation": ["pytest -q tests/"],
+  "memory_file": ".memory.md",
+  "depends_on": [],
+  "enhances": ["supervisor.story-contract", "planning-steward.program-spec-assembly"],
+  "provenance": { "source_story": "", "source_trajectory": "machine-facing-spec lesson", "created_by": "harness" },
+  "failure_signatures": ["repo|wide|writeset", "missing|guard", "parallel|overlap"],
+  "last_evaluation": { "passed": 0, "total": 0, "fresh_runs": 0, "pass_rate": 0.0, "at": "" },
+  "leakage_audit": "unrun"
+}

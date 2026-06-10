@@ -1,0 +1,11 @@
+{
+  "name": "@codeharness/model-gateway",
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@codeharness/agent-output": "0.0.0"
+  }
+}

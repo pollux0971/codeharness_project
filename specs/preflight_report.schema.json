@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PreflightReport",
+  "description": "Advisory self-check the Developer runs BEFORE submitting a proposal. NOT the verdict — the Validator alone decides pass/fail. Bounds self-correction.",
+  "type": "object",
+  "required": ["advisory", "passed", "commands_run", "self_correction_attempts"],
+  "properties": {
+    "advisory": { "const": true },
+    "passed": { "type": "boolean" },
+    "commands_run": { "type": "array", "items": { "type": "string" } },
+    "failures": { "type": "array", "items": { "type": "string" } },
+    "self_correction_attempts": { "type": "integer", "minimum": 0 },
+    "last_failure_signature": { "type": "string" },
+    "verdict": { "enum": ["submit", "self_correct", "escalate"] },
+    "story_id": { "type": "string" }
+  }
+}

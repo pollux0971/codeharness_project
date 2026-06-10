@@ -1,0 +1,43 @@
+# Per-agent / per-task model routing.
+# DEFAULT: Codex via ChatGPT subscription (OAuth), with third-party APIs as
+# fallback. The gateway tries primary, then fallbacks on error/limit.
+version: 2
+
+defaults:
+  fallback_on: [rate_limit, provider_error, context_length_exceeded, timeout, oauth_expired]
+  pin_snapshots: true
+  record_usage: true
+  # Codex subscription shares rate limits with ChatGPT web and is personal-use;
+  # under heavy autonomous load it WILL throttle, so a paid third-party fallback
+  # keeps long /goal runs moving.
+
+agents:
+  planning_steward:
+    primary:   codex/gpt-5.5-codex
+    fallbacks: [deepseek/deepseek-v4-pro]
+  supervisor:
+    primary:   codex/gpt-5.5-codex
+    fallbacks: [deepseek/deepseek-v4-flash]
+  developer:
+    primary:   codex/gpt-5.5-codex
+    fallbacks: [deepseek/deepseek-v4-pro, third_party_openai_compatible/your-model-id]
+  debugger:
+    primary:   codex/gpt-5.5-codex
+    fallbacks: [deepseek/deepseek-v4-pro]
+
+# Trivial work shouldn't burn subscription quota — push it to a cheap third-party.
+task_overrides:
+  patch:
+    developer: deepseek/deepseek-v4-flash
+  research_spike:
+    developer: deepseek/deepseek-v4-flash
+
+# Internal harness jobs (not agent reasoning) — keep off the subscription.
+harness_jobs:
+  context_compaction: deepseek/deepseek-v4-flash
+  trace_summary:      deepseek/deepseek-v4-flash
+
+budgets:
+  per_story_token_cap: 400000
+  per_run_token_cap: 4000000
+  on_exceed: escalate_human

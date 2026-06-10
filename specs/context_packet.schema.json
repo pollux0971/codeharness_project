@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ContextPacket",
+  "type": "object",
+  "required": [
+    "packet_id",
+    "role",
+    "story_id",
+    "token_budget",
+    "included_artifacts",
+    "redaction_status"
+  ],
+  "properties": {
+    "packet_id": {
+      "type": "string"
+    },
+    "role": {
+      "enum": [
+        "planning_steward",
+        "supervisor",
+        "developer",
+        "debugger"
+      ]
+    },
+    "story_id": {
+      "type": "string"
+    },
+    "token_budget": {
+      "type": "integer",
+      "minimum": 512
+    },
+    "included_artifacts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "excluded_artifacts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "redaction_status": {
+      "enum": [
+        "not_required",
+        "redacted",
+        "blocked"
+      ]
+    },
+    "provenance": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    }
+  }
+}

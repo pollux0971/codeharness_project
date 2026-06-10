@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ModelGatewayProviderResult",
+  "type": "object",
+  "required": ["ok", "provider_id", "provider_kind", "errors", "usage"],
+  "properties": {
+    "ok": { "type": "boolean" },
+    "provider_id": { "type": "string", "minLength": 1 },
+    "provider_kind": { "enum": ["scripted", "fixture", "manual", "llm_remote"] },
+    "output": { "type": "object" },
+    "errors": { "type": "array", "items": { "type": "string" } },
+    "usage": {
+      "type": "object",
+      "required": ["inputTokens", "outputTokens"],
+      "properties": {
+        "inputTokens": { "type": "integer", "minimum": 0 },
+        "outputTokens": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

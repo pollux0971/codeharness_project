@@ -1,0 +1,7 @@
+# Python dev/test dependencies for CodeHarness
+#
+# Bootstrap (required before `npm run ci` or `python3 -m pytest skills/`):
+#   python3 -m pip install -r requirements-dev.txt
+#
+# Only test-runner dependencies belong here. No runtime, no LLM, no secrets.
+pytest>=7.0

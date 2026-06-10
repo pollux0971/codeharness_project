@@ -1,0 +1,55 @@
+# Context Manager operational parameters.
+# Grounds the MUSE / ReCAP / AgentSwing / LightMem paper findings in concrete numbers.
+# The context-manager package reads these at runtime (see packages/context-manager).
+version: 1
+
+# ── Two-level adaptive compression (MUSE-Autoskill) ──────────────────────────
+# Level 1: compress a single large node (e.g. one massive tool output).
+# Level 2: chain-compress when the total window still exceeds the chain threshold.
+# Rule: run Level-1 first; only escalate to Level-2 if still over budget.
+compression:
+  level1:
+    node_token_threshold: 4000       # compress a single node when it exceeds this
+    strategy: summarize_node
+  level2:
+    chain_token_threshold: 60000     # chain-compress when total context exceeds this
+    strategy: summarize_chain
+  pinning:
+    keep_first_turns: 3              # verbatim — task framing, contract, env snapshot
+    keep_last_turns: 5               # verbatim — current working context
+  compression_rate_floor: 0.3       # never compress below 30% of original
+                                     # (LightMem: over-compression hurts accuracy)
+
+# ── Sliding window (ReCAP) ───────────────────────────────────────────────────
+sliding_window:
+  max_turns: 20                      # hard cap; oldest non-pinned turns are dropped first
+
+# ── Periodic re-injection (ReCAP anti rule-amnesia) ──────────────────────────
+reinject:
+  story_contract_every_n_calls: 10   # re-inject the active story contract every N LLM calls
+  failure_genes_every_n_calls: 10    # re-inject relevant AVOID warnings every N calls
+  hard_rules_every_n_calls: 20       # re-inject CLAUDE.md invariants (write-set, forbidden, gates)
+
+# ── State-dependent strategy routing (AgentSwing) ────────────────────────────
+# At each compaction trigger, pick a strategy based on trajectory state.
+strategy_routing:
+  search_phase:        keep_last_n       # still exploring → preserve recent turns
+  terminal_phase:      summarize_chain   # converging on answer → compress middle
+  stuck:               aggressive_discard  # same error ≥ N times → discard and reground
+
+# ── Memory tiers (LightMem) ──────────────────────────────────────────────────
+# Expensive trace/memory consolidation happens offline between stories, not
+# during the story run (where only the lightweight online cache is used).
+memory:
+  online_cache_max_turns: 30
+  offline_consolidation_trigger: story_boundary   # consolidate when a story ends
+  offline_consolidation_async: true               # do not block the next story's start
+
+# ── Per-agent token budgets ───────────────────────────────────────────────────
+# Developer gets the largest budget: story_contract + relevant files +
+# failure genes + patch history all need to fit.
+budgets:
+  planning_steward:  32000
+  supervisor:        16000
+  developer:        128000
+  debugger:          32000

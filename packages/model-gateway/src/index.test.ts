@@ -1,0 +1,91 @@
+import { describe, it, expect } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import {
+  callFirstValid,
+  callProvider,
+  createDisabledRemoteProvider,
+  createFixtureProvider,
+  createManualProvider,
+  createScriptedProvider,
+  ProviderRegistry,
+  validateStructuredOutput,
+  type DeveloperOutput,
+} from './index';
+
+const goodDeveloperOutput: DeveloperOutput = {
+  kind: 'patch_proposal', proposal_id: 'p1', story_id: 'STORY-X', changed_files: ['src/a.ts'],
+  contract_id: 'C1', change_type: 'MODIFY', rollback_notes: 'revert src/a.ts',
+};
+
+const req = { request_id: 'r1', target_agent: 'developer' as const, task_class: 'patch_generation' as const, story_id: 'STORY-X' };
+
+describe('model-gateway provider interface', () => {
+  it('scripted_provider_returns_registered_developer_output', async () => {
+    const p = createScriptedProvider('scripted-demo', [{ case_id: 'c1', match: { story_id: 'STORY-X' }, output: goodDeveloperOutput }]);
+    const r = await callProvider(p, req);
+    expect(r.ok).toBe(true);
+    expect(r.output?.kind).toBe('patch_proposal');
+  });
+
+  it('scripted_provider_unmatched_case_returns_structured_blocked_report', async () => {
+    const p = createScriptedProvider('scripted-demo', [{ case_id: 'c1', match: { story_id: 'OTHER' }, output: goodDeveloperOutput }]);
+    const r = await callProvider(p, req);
+    expect(r.ok).toBe(true);
+    expect(r.output?.kind).toBe('blocked_report');
+  });
+
+  it('fixture_provider_reads_agent_output_json', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ch-fixture-'));
+    fs.writeFileSync(path.join(root, 'demo.json'), JSON.stringify(goodDeveloperOutput));
+    const r = await callProvider(createFixtureProvider('fixture', root), { ...req, fixture_id: 'demo' });
+    expect(r.ok).toBe(true);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it('fixture_provider_rejects_path_escape', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ch-fixture-'));
+    const r = await callProvider(createFixtureProvider('fixture', root), { ...req, fixture_id: '../escape' });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(' ')).toMatch(/escapes|ENOENT/);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it('manual_provider_returns_escalation_placeholder', async () => {
+    const r = await callProvider(createManualProvider(), req);
+    expect(r.ok).toBe(true);
+    expect(r.output?.kind).toBe('clarification_request');
+  });
+
+  it('llm_remote_provider_is_not_enabled_without_secret_handle', async () => {
+    const r = await callProvider(createDisabledRemoteProvider(), req);
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(' ')).toMatch(/disabled/);
+  });
+
+  it('provider_output_must_pass_agent_output_validation', () => {
+    expect(validateStructuredOutput('developer', goodDeveloperOutput).ok).toBe(true);
+  });
+
+  it('invalid_provider_output_is_rejected', async () => {
+    const p = createScriptedProvider('bad', [{ case_id: 'bad', match: {}, output: { kind: 'patch_proposal' } as DeveloperOutput }]);
+    const r = await callProvider(p, req);
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(' ')).toMatch(/proposal_id/);
+  });
+
+  it('unknown_provider_kind_is_rejected_by_registry_lookup', () => {
+    const registry = new ProviderRegistry();
+    expect(() => registry.get('missing')).toThrow(/unknown provider/);
+  });
+
+  it('call_first_valid_falls_back_to_second_provider', async () => {
+    const registry = new ProviderRegistry();
+    registry.register(createDisabledRemoteProvider('disabled'));
+    registry.register(createScriptedProvider('scripted', [{ case_id: 'c1', match: {}, output: goodDeveloperOutput }]));
+    const r = await callFirstValid(registry, ['disabled', 'scripted'], req);
+    expect(r.ok).toBe(true);
+    expect(r.provider_id).toBe('scripted');
+  });
+});

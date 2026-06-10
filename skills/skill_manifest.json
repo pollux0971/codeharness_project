@@ -1,0 +1,145 @@
+{
+  "schema_version": "skill_manifest/v2",
+  "note": "Existing skills predate the test-gate; they are 'needs_tests' until tests/ are backfilled and they pass the lifecycle gate (see docs/workflows/08_SKILL_LIFECYCLE_RUNTIME_WORKFLOW.md). | planning-steward PM/Architect/SM skills adapted from BMAD-METHOD (MIT). | Machine-facing program-spec suite (7 skills) registered; see skills/planning-steward/SPEC_SUITE.md.",
+  "lifecycle_defaults": {
+    "register_pass_rate": 1.0,
+    "robustness_runs": 5,
+    "quarantine_below": 0.8,
+    "iteration_budget": 3
+  },
+  "skills": [
+    {
+      "skill_id": "planning-steward.idea-to-epic",
+      "agent_role": "planning_steward",
+      "path": "skills/planning-steward/idea-to-epic",
+      "status": "needs_tests",
+      "tests": "skills/planning-steward/idea-to-epic/tests"
+    },
+    {
+      "skill_id": "supervisor.story-contract",
+      "agent_role": "supervisor",
+      "path": "skills/supervisor/story-contract",
+      "status": "needs_tests",
+      "tests": "skills/supervisor/story-contract/tests"
+    },
+    {
+      "skill_id": "developer.patch-proposal",
+      "agent_role": "developer",
+      "path": "skills/developer/patch-proposal",
+      "status": "needs_tests",
+      "tests": "skills/developer/patch-proposal/tests"
+    },
+    {
+      "skill_id": "debugger.failure-triage",
+      "agent_role": "debugger",
+      "path": "skills/debugger/failure-triage",
+      "status": "needs_tests",
+      "tests": "skills/debugger/failure-triage/tests"
+    },
+    {
+      "skill_id": "shared.example-skill",
+      "agent_role": "shared",
+      "path": "skills/_TEMPLATE",
+      "status": "draft",
+      "tests": "skills/_TEMPLATE/tests"
+    },
+    {
+      "skill_id": "planning-steward.prd-authoring",
+      "agent_role": "planning_steward",
+      "path": "skills/planning-steward/prd-authoring",
+      "status": "needs_tests",
+      "tests": "skills/planning-steward/prd-authoring/tests"
+    },
+    {
+      "skill_id": "planning-steward.architecture-design",
+      "agent_role": "planning_steward",
+      "path": "skills/planning-steward/architecture-design",
+      "status": "needs_tests",
+      "tests": "skills/planning-steward/architecture-design/tests"
+    },
+    {
+      "skill_id": "planning-steward.epic-story-sharding",
+      "agent_role": "planning_steward",
+      "path": "skills/planning-steward/epic-story-sharding",
+      "status": "needs_tests",
+      "tests": "skills/planning-steward/epic-story-sharding/tests"
+    },
+    {
+      "skill_id": "planning-steward.machine-checkable-acceptance",
+      "agent_role": "planning_steward",
+      "path": "skills/planning-steward/machine-checkable-acceptance",
+      "status": "needs_tests",
+      "tests": "skills/planning-steward/machine-checkable-acceptance/tests"
+    },
+    {
+      "skill_id": "planning-steward.behavior-test-derivation",
+      "agent_role": "planning_steward",
+      "path": "skills/planning-steward/behavior-test-derivation",
+      "status": "needs_tests",
+      "tests": "skills/planning-steward/behavior-test-derivation/tests"
+    },
+    {
+      "skill_id": "planning-steward.acceptance-test-scaffold",
+      "agent_role": "planning_steward",
+      "path": "skills/planning-steward/acceptance-test-scaffold",
+      "status": "needs_tests",
+      "tests": "skills/planning-steward/acceptance-test-scaffold/tests"
+    },
+    {
+      "skill_id": "planning-steward.interface-contract-spec",
+      "agent_role": "planning_steward",
+      "path": "skills/planning-steward/interface-contract-spec",
+      "status": "needs_tests",
+      "tests": "skills/planning-steward/interface-contract-spec/tests"
+    },
+    {
+      "skill_id": "planning-steward.write-set-and-guards",
+      "agent_role": "planning_steward",
+      "path": "skills/planning-steward/write-set-and-guards",
+      "status": "needs_tests",
+      "tests": "skills/planning-steward/write-set-and-guards/tests"
+    },
+    {
+      "skill_id": "planning-steward.documented-stub-registry",
+      "agent_role": "planning_steward",
+      "path": "skills/planning-steward/documented-stub-registry",
+      "status": "needs_tests",
+      "tests": "skills/planning-steward/documented-stub-registry/tests"
+    },
+    {
+      "skill_id": "planning-steward.program-spec-assembly",
+      "agent_role": "planning_steward",
+      "path": "skills/planning-steward/program-spec-assembly",
+      "status": "needs_tests",
+      "tests": "skills/planning-steward/program-spec-assembly/tests"
+    },
+    {
+      "skill_id": "shared.task-decomposition",
+      "agent_role": "shared",
+      "path": "skills/shared/task-decomposition",
+      "status": "needs_tests",
+      "tests": "skills/shared/task-decomposition/tests"
+    },
+    {
+      "skill_id": "developer.spec-conformance",
+      "agent_role": "developer",
+      "path": "skills/developer/spec-conformance",
+      "status": "needs_tests",
+      "tests": "skills/developer/spec-conformance/tests"
+    },
+    {
+      "skill_id": "developer.pre-flight-check",
+      "agent_role": "developer",
+      "path": "skills/developer/pre-flight-check",
+      "status": "needs_tests",
+      "tests": "skills/developer/pre-flight-check/tests"
+    },
+    {
+      "skill_id": "shared.structured-escalation",
+      "agent_role": "shared",
+      "path": "skills/shared/structured-escalation",
+      "status": "needs_tests",
+      "tests": "skills/shared/structured-escalation/tests"
+    }
+  ]
+}
