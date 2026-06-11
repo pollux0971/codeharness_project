@@ -9,6 +9,18 @@
     "ci": "tsc -b --pretty false && vitest run && python3 -m pytest -q skills/"
   },
   "devDependencies": {
+    "@codeharness/agent-output": "workspace:*",
+    "@codeharness/context-manager": "workspace:*",
+    "@codeharness/debugger-runtime": "workspace:*",
+    "@codeharness/failure-bank": "workspace:*",
+    "@codeharness/harness-core": "workspace:*",
+    "@codeharness/model-gateway": "workspace:*",
+    "@codeharness/permission-gateway": "workspace:*",
+    "@codeharness/preflight-runner": "workspace:*",
+    "@codeharness/shared": "workspace:*",
+    "@codeharness/tool-executor": "workspace:*",
+    "@codeharness/validator-suite": "workspace:*",
+    "@codeharness/workspace-manager": "workspace:*",
     "@types/node": "^22.10.2",
     "typescript": "^5.6.3",
     "vitest": "^2.1.8"

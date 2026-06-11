@@ -8,6 +8,42 @@ importers:
 
   .:
     devDependencies:
+      '@codeharness/agent-output':
+        specifier: workspace:*
+        version: link:packages/agent-output
+      '@codeharness/context-manager':
+        specifier: workspace:*
+        version: link:packages/context-manager
+      '@codeharness/debugger-runtime':
+        specifier: workspace:*
+        version: link:packages/debugger-runtime
+      '@codeharness/failure-bank':
+        specifier: workspace:*
+        version: link:packages/failure-bank
+      '@codeharness/harness-core':
+        specifier: workspace:*
+        version: link:packages/harness-core
+      '@codeharness/model-gateway':
+        specifier: workspace:*
+        version: link:packages/model-gateway
+      '@codeharness/permission-gateway':
+        specifier: workspace:*
+        version: link:packages/permission-gateway
+      '@codeharness/preflight-runner':
+        specifier: workspace:*
+        version: link:packages/preflight-runner
+      '@codeharness/shared':
+        specifier: workspace:*
+        version: link:packages/shared
+      '@codeharness/tool-executor':
+        specifier: workspace:*
+        version: link:packages/tool-executor
+      '@codeharness/validator-suite':
+        specifier: workspace:*
+        version: link:packages/validator-suite
+      '@codeharness/workspace-manager':
+        specifier: workspace:*
+        version: link:packages/workspace-manager
       '@types/node':
         specifier: ^22.10.2
         version: 22.19.20
