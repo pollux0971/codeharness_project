@@ -112,3 +112,131 @@ export function cleanupWorkspace(registry: WorkspaceRegistry, ws: WorkspaceManif
   fs.rmSync(ws.root, { recursive: true, force: true });
   registry.unregister(ws.root);
 }
+
+// ---- STORY-010.1: Greenfield workspace bootstrap ----
+
+/** System path prefixes that are never safe as a sandboxRoot. */
+const SYSTEM_PATH_PREFIXES = [
+  '/bin', '/sbin', '/usr', '/lib', '/lib64',
+  '/etc', '/var', '/sys', '/proc', '/dev',
+  '/boot', '/root', '/run',
+];
+
+export interface GreenfieldWorkspaceInput {
+  sandboxRoot: string;
+  projectSlug: string;
+  workspaceId?: string;
+  template?: 'minimal-ts' | 'empty';
+}
+
+export interface GreenfieldWorkspace {
+  workspace_id: string;
+  mode: 'greenfield';
+  root: string;
+  target_project_root: string;
+  created_files: string[];
+  rollback_plan: string[];
+  safety_policy: {
+    sandbox_root: string;
+    path_traversal_rejected: true;
+    external_network_allowed: false;
+  };
+}
+
+function assertSandboxRootSafe(sandboxRoot: string): string {
+  const abs = path.resolve(sandboxRoot);
+  if (abs === '/') throw new Error('sandboxRoot must not be filesystem root');
+  for (const prefix of SYSTEM_PATH_PREFIXES) {
+    if (abs === prefix || abs.startsWith(prefix + path.sep)) {
+      throw new Error(`sandboxRoot is a system path: ${abs}`);
+    }
+  }
+  return abs;
+}
+
+function assertProjectSlugSafe(slug: string): void {
+  if (
+    !slug ||
+    slug.includes('..') ||
+    slug.includes('/') ||
+    slug.includes('\\') ||
+    slug.includes('\0') ||
+    path.isAbsolute(slug)
+  ) {
+    throw new Error(`projectSlug is invalid: ${JSON.stringify(slug)}`);
+  }
+}
+
+const MINIMAL_TS_SCAFFOLD: ReadonlyArray<[string, string]> = [
+  ['.gitignore', 'node_modules/\ndist/\n'],
+  ['package.json', JSON.stringify(
+    { name: 'generated-project', version: '0.1.0', private: true,
+      scripts: { build: 'tsc' }, devDependencies: { typescript: '^5.0.0' } },
+    null, 2) + '\n'],
+  ['src/index.ts', '// generated project entry point\nexport {};\n'],
+  ['tsconfig.json', JSON.stringify(
+    { compilerOptions: { target: 'ES2022', module: 'commonjs',
+        outDir: 'dist', rootDir: 'src', strict: true }, include: ['src'] },
+    null, 2) + '\n'],
+];
+
+/**
+ * Bootstrap a brand-new target project inside a sandbox directory.
+ * Initializes a clean git repo, scaffolds per template, enforces sandbox boundary.
+ * STORY-010.1 / DECISION D12 (Node/TS default).
+ */
+export function bootstrapGreenfieldWorkspace(
+  input: GreenfieldWorkspaceInput,
+): GreenfieldWorkspace {
+  const { projectSlug, template = 'minimal-ts' } = input;
+
+  assertProjectSlugSafe(projectSlug);
+  const sandboxAbs = assertSandboxRootSafe(input.sandboxRoot);
+
+  const workspace_id = input.workspaceId ?? `gf_${projectSlug}`;
+  const targetProjectRoot = path.join(sandboxAbs, projectSlug);
+
+  // Hard containment check before any FS mutation
+  if (!isPathInsideRoot(sandboxAbs, targetProjectRoot)) {
+    throw new Error('target_project_root escapes sandbox');
+  }
+
+  fs.mkdirSync(targetProjectRoot, { recursive: true });
+
+  git(targetProjectRoot, ['init', '-q']);
+  git(targetProjectRoot, ['config', 'user.email', 'harness@codeharness.local']);
+  git(targetProjectRoot, ['config', 'user.name', 'codeharness']);
+
+  const scaffold = template === 'minimal-ts' ? MINIMAL_TS_SCAFFOLD : [];
+  const created_files: string[] = [];
+
+  for (const [relPath, content] of scaffold) {
+    const absPath = path.join(targetProjectRoot, relPath);
+    fs.mkdirSync(path.dirname(absPath), { recursive: true });
+    fs.writeFileSync(absPath, content, 'utf8');
+    created_files.push(relPath);
+  }
+  // MINIMAL_TS_SCAFFOLD is already sorted; explicit sort for the 'empty' case
+  created_files.sort();
+
+  if (created_files.length > 0) {
+    git(targetProjectRoot, ['add', '-A']);
+    git(targetProjectRoot, ['commit', '-q', '-m', 'greenfield scaffold']);
+  } else {
+    git(targetProjectRoot, ['commit', '--allow-empty', '-q', '-m', 'greenfield scaffold']);
+  }
+
+  return {
+    workspace_id,
+    mode: 'greenfield',
+    root: sandboxAbs,
+    target_project_root: targetProjectRoot,
+    created_files,
+    rollback_plan: [`rm -rf ${targetProjectRoot}`],
+    safety_policy: {
+      sandbox_root: sandboxAbs,
+      path_traversal_rejected: true,
+      external_network_allowed: false,
+    },
+  };
+}
