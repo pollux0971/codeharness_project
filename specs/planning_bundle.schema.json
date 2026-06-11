@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "planning_bundle.schema.json",
+  "title": "PlanningBundle",
+  "description": "Structured planning artifact produced by the Planning Steward from an IdeaInput. Contains a PRD, an architecture sketch, and structured open decisions for unresolved ambiguities.",
+  "type": "object",
+  "required": ["bundle_id", "idea_id", "prd", "architecture", "open_decisions", "source_refs"],
+  "additionalProperties": false,
+  "properties": {
+    "bundle_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Deterministic identifier: bundle-{idea_id}"
+    },
+    "idea_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Caller-supplied or title-derived slug; used as bundle_id suffix"
+    },
+    "prd": {
+      "type": "object",
+      "description": "Product Requirements Document section",
+      "required": ["title", "problem_statement", "users", "goals", "non_goals"],
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "problem_statement": {
+          "type": "string",
+          "minLength": 1
+        },
+        "users": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "goals": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "non_goals": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "architecture": {
+      "type": "object",
+      "description": "Architecture sketch derived from the idea mode",
+      "required": ["summary", "components", "constraints", "risks"],
+      "additionalProperties": false,
+      "properties": {
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "components": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "Named modules/packages; at least one required for backlog generation"
+        },
+        "constraints": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "risks": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "open_decisions": {
+      "type": "array",
+      "description": "Structured escalation questions for unresolved ambiguities in the input",
+      "items": {
+        "type": "object",
+        "required": ["id", "question", "options"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "question": { "type": "string" },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["option_id", "tradeoff"],
+              "additionalProperties": false,
+              "properties": {
+                "option_id": { "type": "string" },
+                "tradeoff": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "source_refs": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Document paths or references that informed this bundle"
+    }
+  }
+}

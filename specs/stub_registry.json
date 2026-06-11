@@ -67,11 +67,6 @@
       "owner": "STORY-002.1"
     },
     {
-      "symbol": "buildStoryGraph",
-      "file": "planning-steward/src/index.ts",
-      "owner": "STORY-000.4"
-    },
-    {
       "symbol": "runSkillTests",
       "file": "skill-tester/src/index.ts",
       "owner": "ROADMAP:phase-2"

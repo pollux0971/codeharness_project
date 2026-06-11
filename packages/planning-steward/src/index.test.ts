@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   classifyIdea, detectParallelismConflict, selectableStories, validatePlanningBundle,
   createPlanningBundle, requiredPlanningFiles, StoryNode, IdeaInput,
+  generateBacklogFromPlanningBundle, buildStoryGraph, PlanningBundle,
 } from './index';
 
 describe('planning-steward (existing)', () => {
@@ -191,5 +192,320 @@ describe('STORY-009.1: createPlanningBundle', () => {
     const bundle = createPlanningBundle(FULL_IDEA);
     const keys = Object.keys(bundle).sort();
     expect(keys).toEqual(['architecture', 'bundle_id', 'idea_id', 'open_decisions', 'prd', 'source_refs']);
+  });
+});
+
+// ── STORY-009.2: generateBacklogFromPlanningBundle ───────────────────────────
+
+const BUNDLE_FOR_GEN: PlanningBundle = {
+  bundle_id: 'bundle-test-idea-1',
+  idea_id: 'test-idea-1',
+  prd: {
+    title: 'Build a logging system',
+    problem_statement: 'We need a structured logging system for tracing agent execution.',
+    users: ['developers', 'operators'],
+    goals: ['capture all agent events', 'support replay'],
+    non_goals: ['real-time alerting'],
+  },
+  architecture: {
+    summary: 'New standalone system; independent module boundaries apply.',
+    components: ['core-module', 'api-layer', 'test-harness'],
+    constraints: ['no external dependencies'],
+    risks: ['scope creep on unplanned dependencies'],
+  },
+  open_decisions: [],
+  source_refs: ['docs/architecture/02_RUNTIME_STATE_MACHINE.md'],
+};
+
+const VALID_PARALLELISM_CLASSES = new Set(['parallel_safe', 'parallel_with_barrier', 'sequential']);
+
+describe('STORY-009.2: generateBacklogFromPlanningBundle', () => {
+  it('STORY-009.2: valid bundle generates at least one epic', () => {
+    const backlog = generateBacklogFromPlanningBundle(BUNDLE_FOR_GEN);
+    expect(backlog.epics.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('STORY-009.2: valid bundle generates at least one story', () => {
+    const backlog = generateBacklogFromPlanningBundle(BUNDLE_FOR_GEN);
+    expect(backlog.stories.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('STORY-009.2: generated epic has required schema fields', () => {
+    const backlog = generateBacklogFromPlanningBundle(BUNDLE_FOR_GEN);
+    for (const epic of backlog.epics) {
+      expect(typeof epic.epic_id).toBe('string');
+      expect(epic.epic_id.length).toBeGreaterThan(0);
+      expect(typeof epic.title).toBe('string');
+      expect(epic.title.length).toBeGreaterThan(0);
+      expect(typeof epic.objective).toBe('string');
+      expect(Array.isArray(epic.depends_on)).toBe(true);
+      expect(Array.isArray(epic.exit_criteria)).toBe(true);
+      expect(epic.exit_criteria.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('STORY-009.2: generated story has required schema fields', () => {
+    const backlog = generateBacklogFromPlanningBundle(BUNDLE_FOR_GEN);
+    for (const story of backlog.stories) {
+      expect(typeof story.story_id).toBe('string');
+      expect(story.story_id.length).toBeGreaterThan(0);
+      expect(typeof story.epic_id).toBe('string');
+      expect(typeof story.title).toBe('string');
+      expect(typeof story.objective).toBe('string');
+      expect(Array.isArray(story.depends_on)).toBe(true);
+      expect(VALID_PARALLELISM_CLASSES.has(story.parallelism_class)).toBe(true);
+      expect(Array.isArray(story.allowed_write_set)).toBe(true);
+      expect(story.allowed_write_set.length).toBeGreaterThan(0);
+      expect(Array.isArray(story.forbidden_actions)).toBe(true);
+      expect(story.forbidden_actions.length).toBeGreaterThan(0);
+      expect(typeof story.acceptance_criteria).toBe('object');
+      expect(story.acceptance_criteria).not.toBeNull();
+      expect(Array.isArray(story.validation_commands)).toBe(true);
+      expect(story.validation_commands.length).toBeGreaterThan(0);
+      expect(Array.isArray(story.rollback_notes)).toBe(true);
+      expect(story.rollback_notes.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('STORY-009.2: story IDs are deterministic', () => {
+    const b1 = generateBacklogFromPlanningBundle(BUNDLE_FOR_GEN);
+    const b2 = generateBacklogFromPlanningBundle(BUNDLE_FOR_GEN);
+    const ids1 = b1.stories.map(s => s.story_id);
+    const ids2 = b2.stories.map(s => s.story_id);
+    expect(ids1).toEqual(ids2);
+  });
+
+  it('STORY-009.2: epic IDs are deterministic', () => {
+    const b1 = generateBacklogFromPlanningBundle(BUNDLE_FOR_GEN);
+    const b2 = generateBacklogFromPlanningBundle(BUNDLE_FOR_GEN);
+    const ids1 = b1.epics.map(e => e.epic_id);
+    const ids2 = b2.epics.map(e => e.epic_id);
+    expect(ids1).toEqual(ids2);
+  });
+
+  it('STORY-009.2: same input produces same generated backlog', () => {
+    const b1 = generateBacklogFromPlanningBundle(BUNDLE_FOR_GEN);
+    const b2 = generateBacklogFromPlanningBundle(BUNDLE_FOR_GEN);
+    expect(JSON.stringify(b1)).toBe(JSON.stringify(b2));
+  });
+
+  it('STORY-009.2: output ordering is deterministic — components sorted alphabetically', () => {
+    const unsorted: PlanningBundle = {
+      ...BUNDLE_FOR_GEN,
+      architecture: { ...BUNDLE_FOR_GEN.architecture, components: ['z-comp', 'a-comp', 'm-comp'] },
+    };
+    const b1 = generateBacklogFromPlanningBundle(unsorted);
+    const b2 = generateBacklogFromPlanningBundle(unsorted);
+    expect(JSON.stringify(b1)).toBe(JSON.stringify(b2));
+    const compEpicTitles = b1.epics.slice(1, -1).map(e => e.title);
+    expect(compEpicTitles[0]).toContain('a-comp');
+    expect(compEpicTitles[1]).toContain('m-comp');
+    expect(compEpicTitles[2]).toContain('z-comp');
+  });
+
+  it('STORY-009.2: no duplicate story IDs', () => {
+    const backlog = generateBacklogFromPlanningBundle(BUNDLE_FOR_GEN);
+    const ids = backlog.stories.map(s => s.story_id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('STORY-009.2: no duplicate epic IDs', () => {
+    const backlog = generateBacklogFromPlanningBundle(BUNDLE_FOR_GEN);
+    const ids = backlog.epics.map(e => e.epic_id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('STORY-009.2: no dangling story dependencies — all depends_on reference existing stories', () => {
+    const backlog = generateBacklogFromPlanningBundle(BUNDLE_FOR_GEN);
+    const allStoryIds = new Set(backlog.stories.map(s => s.story_id));
+    for (const story of backlog.stories) {
+      for (const dep of story.depends_on) {
+        expect(allStoryIds.has(dep)).toBe(true);
+      }
+    }
+  });
+
+  it('STORY-009.2: no dangling epic dependencies — all depends_on reference existing epics', () => {
+    const backlog = generateBacklogFromPlanningBundle(BUNDLE_FOR_GEN);
+    const allEpicIds = new Set(backlog.epics.map(e => e.epic_id));
+    for (const epic of backlog.epics) {
+      for (const dep of epic.depends_on) {
+        expect(allEpicIds.has(dep)).toBe(true);
+      }
+    }
+  });
+
+  it('STORY-009.2: dependency graph is acyclic', () => {
+    const backlog = generateBacklogFromPlanningBundle(BUNDLE_FOR_GEN);
+    const storyMap = new Map(backlog.stories.map(s => [s.story_id, s.depends_on]));
+    function hasCycle(id: string, visited: Set<string>, stack: Set<string>): boolean {
+      visited.add(id);
+      stack.add(id);
+      for (const dep of (storyMap.get(id) ?? [])) {
+        if (!visited.has(dep) && hasCycle(dep, visited, stack)) return true;
+        if (stack.has(dep)) return true;
+      }
+      stack.delete(id);
+      return false;
+    }
+    const visited = new Set<string>();
+    for (const story of backlog.stories) {
+      if (!visited.has(story.story_id)) {
+        expect(hasCycle(story.story_id, visited, new Set())).toBe(false);
+      }
+    }
+  });
+
+  it('STORY-009.2: parallelism class is a valid enum value for every story', () => {
+    const backlog = generateBacklogFromPlanningBundle(BUNDLE_FOR_GEN);
+    for (const story of backlog.stories) {
+      expect(VALID_PARALLELISM_CLASSES.has(story.parallelism_class)).toBe(true);
+    }
+  });
+
+  it('STORY-009.2: acceptance criteria are machine-readable objects, not only prose strings', () => {
+    const backlog = generateBacklogFromPlanningBundle(BUNDLE_FOR_GEN);
+    for (const story of backlog.stories) {
+      const ac = story.acceptance_criteria;
+      expect(typeof ac).toBe('object');
+      expect(ac).not.toBeNull();
+      const values = Object.values(ac);
+      expect(values.length).toBeGreaterThan(0);
+      for (const v of values) {
+        expect(Array.isArray(v)).toBe(true);
+      }
+    }
+  });
+
+  it('STORY-009.2: validation commands present and non-empty for every story', () => {
+    const backlog = generateBacklogFromPlanningBundle(BUNDLE_FOR_GEN);
+    for (const story of backlog.stories) {
+      expect(story.validation_commands.length).toBeGreaterThan(0);
+      expect(story.validation_commands.every(c => typeof c === 'string' && c.length > 0)).toBe(true);
+    }
+  });
+
+  it('STORY-009.2: allowed write-set present and non-empty for every story', () => {
+    const backlog = generateBacklogFromPlanningBundle(BUNDLE_FOR_GEN);
+    for (const story of backlog.stories) {
+      expect(story.allowed_write_set.length).toBeGreaterThan(0);
+      expect(story.allowed_write_set.every(p => typeof p === 'string' && p.length > 0)).toBe(true);
+    }
+  });
+
+  it('STORY-009.2: forbidden actions present and non-empty for every story', () => {
+    const backlog = generateBacklogFromPlanningBundle(BUNDLE_FOR_GEN);
+    for (const story of backlog.stories) {
+      expect(story.forbidden_actions.length).toBeGreaterThan(0);
+      expect(story.forbidden_actions.every(a => typeof a === 'string' && a.length > 0)).toBe(true);
+    }
+  });
+
+  it('STORY-009.2: write-sets are within the target project root', () => {
+    const backlog = generateBacklogFromPlanningBundle(BUNDLE_FOR_GEN);
+    const expectedRoot = 'packages/test-idea-1';
+    for (const story of backlog.stories) {
+      for (const ws of story.allowed_write_set) {
+        expect(ws.startsWith(expectedRoot)).toBe(true);
+      }
+    }
+  });
+
+  it('STORY-009.2: generated stories conform to story schema — story_id includes bundle prefix', () => {
+    const backlog = generateBacklogFromPlanningBundle(BUNDLE_FOR_GEN);
+    for (const story of backlog.stories) {
+      expect(story.story_id.startsWith('bundle-test-idea-1-story-')).toBe(true);
+    }
+  });
+
+  it('STORY-009.2: generated epics conform to epic schema — epic_id includes bundle prefix', () => {
+    const backlog = generateBacklogFromPlanningBundle(BUNDLE_FOR_GEN);
+    for (const epic of backlog.epics) {
+      expect(epic.epic_id.startsWith('bundle-test-idea-1-epic-')).toBe(true);
+    }
+  });
+
+  it('STORY-009.2: source_bundle_id matches input bundle_id', () => {
+    const backlog = generateBacklogFromPlanningBundle(BUNDLE_FOR_GEN);
+    expect(backlog.source_bundle_id).toBe(BUNDLE_FOR_GEN.bundle_id);
+  });
+
+  it('STORY-009.2: malformed bundle rejected — missing bundle_id', () => {
+    const bad = { ...BUNDLE_FOR_GEN, bundle_id: '' };
+    expect(() => generateBacklogFromPlanningBundle(bad as PlanningBundle)).toThrow(/bundle_id/);
+  });
+
+  it('STORY-009.2: malformed bundle rejected — missing prd.title', () => {
+    const bad = { ...BUNDLE_FOR_GEN, prd: { ...BUNDLE_FOR_GEN.prd, title: '' } };
+    expect(() => generateBacklogFromPlanningBundle(bad)).toThrow(/prd.title/);
+  });
+
+  it('STORY-009.2: malformed bundle rejected — empty components array', () => {
+    const bad = { ...BUNDLE_FOR_GEN, architecture: { ...BUNDLE_FOR_GEN.architecture, components: [] } };
+    expect(() => generateBacklogFromPlanningBundle(bad)).toThrow(/components/);
+  });
+
+  it('STORY-009.2: secret-like content in bundle rejected', () => {
+    const bad = { ...BUNDLE_FOR_GEN, prd: { ...BUNDLE_FOR_GEN.prd, title: 'api_key: abc123' } };
+    expect(() => generateBacklogFromPlanningBundle(bad)).toThrow(/secret/);
+  });
+
+  it('STORY-009.2: no LLM call — purely deterministic synchronous function', () => {
+    const results = [
+      generateBacklogFromPlanningBundle(BUNDLE_FOR_GEN),
+      generateBacklogFromPlanningBundle(BUNDLE_FOR_GEN),
+      generateBacklogFromPlanningBundle(BUNDLE_FOR_GEN),
+    ];
+    const serialized = results.map(r => JSON.stringify(r));
+    expect(serialized[0]).toBe(serialized[1]);
+    expect(serialized[1]).toBe(serialized[2]);
+  });
+
+  it('STORY-009.2: does not mutate the input bundle', () => {
+    const original = JSON.stringify(BUNDLE_FOR_GEN);
+    generateBacklogFromPlanningBundle(BUNDLE_FOR_GEN);
+    expect(JSON.stringify(BUNDLE_FOR_GEN)).toBe(original);
+  });
+
+  it('STORY-009.2: roundtrip through createPlanningBundle then generateBacklog succeeds', () => {
+    const idea: IdeaInput = {
+      idea_id: 'roundtrip-1',
+      title: 'Roundtrip test system',
+      description: 'A test to verify the full create→generate pipeline.',
+      goals: ['verify pipeline'],
+      target_users: ['developers'],
+      constraints: ['no network'],
+    };
+    const bundle = createPlanningBundle(idea);
+    const backlog = generateBacklogFromPlanningBundle(bundle);
+    expect(backlog.source_bundle_id).toBe(bundle.bundle_id);
+    expect(backlog.epics.length).toBeGreaterThan(0);
+    expect(backlog.stories.length).toBeGreaterThan(0);
+  });
+});
+
+// ── STORY-009.2: buildStoryGraph (implemented via generateBacklogFromPlanningBundle) ──
+
+describe('STORY-009.2: buildStoryGraph', () => {
+  it('STORY-009.2: buildStoryGraph returns StoryNode array from a PlanningBundle', () => {
+    const nodes = buildStoryGraph(BUNDLE_FOR_GEN);
+    expect(Array.isArray(nodes)).toBe(true);
+    expect(nodes.length).toBeGreaterThan(0);
+  });
+
+  it('STORY-009.2: buildStoryGraph nodes have story_id, depends_on, allowed_write_set, parallelism_class', () => {
+    const nodes = buildStoryGraph(BUNDLE_FOR_GEN);
+    for (const node of nodes) {
+      expect(typeof node.story_id).toBe('string');
+      expect(Array.isArray(node.depends_on)).toBe(true);
+      expect(Array.isArray(node.allowed_write_set)).toBe(true);
+      expect(node.parallelism_class).toBeDefined();
+    }
+  });
+
+  it('STORY-009.2: buildStoryGraph story IDs are deterministic', () => {
+    const n1 = buildStoryGraph(BUNDLE_FOR_GEN).map(n => n.story_id);
+    const n2 = buildStoryGraph(BUNDLE_FOR_GEN).map(n => n.story_id);
+    expect(n1).toEqual(n2);
   });
 });

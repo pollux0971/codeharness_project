@@ -225,7 +225,227 @@ export function createPlanningBundle(input: IdeaInput): PlanningBundle {
   };
 }
 
-/** Build the epic/story DAG with edges + parallelism classes. Later phase. */
-export function buildStoryGraph(_bundle: Record<string, string>): StoryNode[] {
-  throw new Error('not implemented: buildStoryGraph');
+// ── STORY-009.2: generateBacklogFromPlanningBundle ───────────────────────────
+
+export type GeneratedEpic = {
+  epic_id: string;
+  title: string;
+  objective: string;
+  depends_on: string[];
+  exit_criteria: string[];
+};
+
+export type GeneratedStory = {
+  story_id: string;
+  epic_id: string;
+  title: string;
+  objective: string;
+  depends_on: string[];
+  parallelism_class: 'parallel_safe' | 'parallel_with_barrier' | 'sequential';
+  allowed_write_set: string[];
+  forbidden_actions: string[];
+  acceptance_criteria: Record<string, unknown>;
+  validation_commands: string[];
+  rollback_notes: string[];
+};
+
+export type GeneratedBacklog = {
+  source_bundle_id: string;
+  epics: GeneratedEpic[];
+  stories: GeneratedStory[];
+};
+
+const STANDARD_FORBIDDEN_ACTIONS = [
+  'No reading secrets, .env, or credential files',
+  'No sudo or privilege escalation',
+  'No real provider or network API calls (scripted/fixture only)',
+  'No deleting or weakening existing tests',
+  'No writes outside the allowed write-set',
+];
+
+const BUNDLE_SECRET_RE = /\b(?:password|api[-_]key|secret[-_]key|auth[-_]token|access[-_]key|private[-_]key|bearer)\s*[:=]/i;
+
+function checkBundleForSecrets(bundle: PlanningBundle): void {
+  const fields: string[] = [
+    bundle.bundle_id,
+    bundle.idea_id,
+    bundle.prd.title,
+    bundle.prd.problem_statement,
+    ...bundle.prd.users,
+    ...bundle.prd.goals,
+    ...bundle.prd.non_goals,
+    bundle.architecture.summary,
+    ...bundle.architecture.components,
+    ...bundle.architecture.constraints,
+    ...bundle.architecture.risks,
+    ...bundle.source_refs,
+    ...bundle.open_decisions.map(od => od.question),
+  ];
+  for (const f of fields) {
+    if (BUNDLE_SECRET_RE.test(f)) {
+      throw new Error('generateBacklog: input contains secret-like content');
+    }
+  }
+}
+
+function pad2(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
+/**
+ * STORY-009.2: Deterministic backlog generator.
+ * Expands a PlanningBundle into schema-valid GeneratedEpic[] and GeneratedStory[].
+ * No LLM, no external API, no secret reads. Caller may inject bundle_id for
+ * full determinism. Output ordering and IDs are fully deterministic.
+ */
+export function generateBacklogFromPlanningBundle(bundle: PlanningBundle): GeneratedBacklog {
+  if (!bundle?.bundle_id?.trim()) throw new Error('generateBacklog: bundle_id is required');
+  if (!bundle?.prd?.title?.trim()) throw new Error('generateBacklog: prd.title is required');
+  if (!Array.isArray(bundle?.architecture?.components) || bundle.architecture.components.length === 0) {
+    throw new Error('generateBacklog: architecture.components must have at least one entry');
+  }
+
+  checkBundleForSecrets(bundle);
+
+  const prefix = bundle.bundle_id;
+  const components = [...bundle.architecture.components].sort();
+  const baseProject = prefix.replace(/^bundle-/, '');
+  const projectRoot = `packages/${baseProject}`;
+
+  const epics: GeneratedEpic[] = [];
+  const stories: GeneratedStory[] = [];
+
+  // Epic 01: Foundation
+  const foundEpicId = `${prefix}-epic-${pad2(1)}`;
+  const foundStoryId = `${prefix}-story-${pad2(1)}.1`;
+
+  epics.push({
+    epic_id: foundEpicId,
+    title: `Foundation — ${bundle.prd.title}`,
+    objective: `Establish project structure and shared types for: ${bundle.prd.problem_statement.slice(0, 120)}`,
+    depends_on: [],
+    exit_criteria: ['project_structure_exists', 'shared_types_defined', 'build_passes'],
+  });
+
+  stories.push({
+    story_id: foundStoryId,
+    epic_id: foundEpicId,
+    title: 'Set up project structure and shared types',
+    objective: 'Create the package scaffold, TypeScript config, and shared type definitions.',
+    depends_on: [],
+    parallelism_class: 'sequential',
+    allowed_write_set: [`${projectRoot}/`],
+    forbidden_actions: [...STANDARD_FORBIDDEN_ACTIONS],
+    acceptance_criteria: {
+      files_must_exist: [`${projectRoot}/package.json`, `${projectRoot}/tsconfig.json`],
+      behaviors_must_pass: ['project_structure_exists', 'typecheck_passes'],
+      commands_must_pass: ['pnpm typecheck'],
+    },
+    validation_commands: ['pnpm typecheck', 'pnpm test'],
+    rollback_notes: [`Delete ${projectRoot}/ directory to revert project scaffold.`],
+  });
+
+  // Epics 02…N+1: one per architecture component (sorted for determinism)
+  const componentTestStoryIds: string[] = [];
+
+  components.forEach((component, idx) => {
+    const epicNum = pad2(idx + 2);
+    const compEpicId = `${prefix}-epic-${epicNum}`;
+    const implStoryId = `${prefix}-story-${epicNum}.1`;
+    const testStoryId = `${prefix}-story-${epicNum}.2`;
+
+    epics.push({
+      epic_id: compEpicId,
+      title: `Implement ${component}`,
+      objective: `Build and test the ${component} module for ${bundle.prd.title}.`,
+      depends_on: [foundEpicId],
+      exit_criteria: [
+        `${component}_implements_contract`,
+        `${component}_tests_pass`,
+      ],
+    });
+
+    stories.push({
+      story_id: implStoryId,
+      epic_id: compEpicId,
+      title: `Implement ${component} core`,
+      objective: `Implement the primary logic and public interface for ${component}.`,
+      depends_on: [foundStoryId],
+      parallelism_class: 'sequential',
+      allowed_write_set: [`${projectRoot}/${component}/src/`],
+      forbidden_actions: [...STANDARD_FORBIDDEN_ACTIONS],
+      acceptance_criteria: {
+        behaviors_must_pass: [`${component}_core_implemented`, `${component}_types_exported`],
+        commands_must_pass: ['pnpm typecheck'],
+      },
+      validation_commands: [`pnpm test --filter ${component}`, 'pnpm typecheck'],
+      rollback_notes: [`Revert changes in ${projectRoot}/${component}/src/.`],
+    });
+
+    stories.push({
+      story_id: testStoryId,
+      epic_id: compEpicId,
+      title: `Test ${component}`,
+      objective: `Add unit tests covering all AC behaviors for ${component}.`,
+      depends_on: [implStoryId],
+      parallelism_class: 'parallel_safe',
+      allowed_write_set: [`${projectRoot}/${component}/src/`],
+      forbidden_actions: [...STANDARD_FORBIDDEN_ACTIONS],
+      acceptance_criteria: {
+        behaviors_must_pass: [`${component}_tests_added`, `${component}_ac_covered`],
+        commands_must_pass: [`pnpm test --filter ${component}`, 'pnpm typecheck'],
+      },
+      validation_commands: [`pnpm test --filter ${component}`, 'pnpm typecheck'],
+      rollback_notes: [`Revert test additions in ${projectRoot}/${component}/.`],
+    });
+
+    componentTestStoryIds.push(testStoryId);
+  });
+
+  // Final epic: Integration
+  const integrationEpicNum = pad2(components.length + 2);
+  const integrationEpicId = `${prefix}-epic-${integrationEpicNum}`;
+  const integrationStoryId = `${prefix}-story-${integrationEpicNum}.1`;
+
+  epics.push({
+    epic_id: integrationEpicId,
+    title: `Integration — ${bundle.prd.title}`,
+    objective: 'Integrate all components and verify end-to-end behavior.',
+    depends_on: epics.slice(1).map(e => e.epic_id),
+    exit_criteria: ['all_components_integrated', 'e2e_validation_passes'],
+  });
+
+  stories.push({
+    story_id: integrationStoryId,
+    epic_id: integrationEpicId,
+    title: 'Integration tests and end-to-end validation',
+    objective: 'Add integration tests verifying all components work together as specified in the PRD.',
+    depends_on: [...componentTestStoryIds],
+    parallelism_class: 'sequential',
+    allowed_write_set: [`${projectRoot}/`],
+    forbidden_actions: [...STANDARD_FORBIDDEN_ACTIONS],
+    acceptance_criteria: {
+      behaviors_must_pass: ['all_components_integrated', 'e2e_tests_pass'],
+      commands_must_pass: ['pnpm test', 'pnpm typecheck'],
+    },
+    validation_commands: ['pnpm test', 'pnpm typecheck'],
+    rollback_notes: ['Revert integration test files.'],
+  });
+
+  return {
+    source_bundle_id: prefix,
+    epics,
+    stories,
+  };
+}
+
+/** Build the story DAG from a planning bundle. Returns StoryNode[] for scheduler use. */
+export function buildStoryGraph(bundle: PlanningBundle): StoryNode[] {
+  const backlog = generateBacklogFromPlanningBundle(bundle);
+  return backlog.stories.map(s => ({
+    story_id: s.story_id,
+    depends_on: s.depends_on,
+    allowed_write_set: s.allowed_write_set,
+    parallelism_class: s.parallelism_class,
+  }));
 }
