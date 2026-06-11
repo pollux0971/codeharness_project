@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   validateStoryContract, validateAcceptanceCriteria, validateForbiddenActions,
   validateWriteSet, validatePromotionGate, validateNoSecretLeak, validateDocumentedStubsHaveStory, specConformanceGate,
-  validatePlanningBundle, requiredPlanningBundleFiles,
+  validatePlanningBundle, requiredPlanningBundleFiles, planningBundleValidationGate,
 } from './index';
 
 const goodContract = {
@@ -89,4 +89,142 @@ describe('validator-suite spec-conformance gate', () => {
   it('spec_conformance_gate_blocks_out_of_write_set', () => expect(specConformanceGate({ proposal: { ...goodProposal, changed_files: ['other/x.ts'] }, contract }).ok).toBe(false));
   it('spec_conformance_gate_blocks_missing_rollback', () => { const { rollback_notes, ...p } = goodProposal; expect(specConformanceGate({ proposal: p, contract }).ok).toBe(false); });
   it('spec_conformance_gate_blocks_prose_acceptance', () => expect(specConformanceGate({ proposal: goodProposal, contract: { ...contract, acceptance_criteria: ['works'] } }).ok).toBe(false));
+});
+
+// ── STORY-009.3: planningBundleValidationGate ────────────────────────────────
+
+const VALID_BUNDLE = {
+  bundle_id: 'bundle-test-feature',
+  idea_id: 'test-feature',
+  prd: {
+    title: 'Test Feature',
+    problem_statement: 'We need a test feature.',
+    users: ['developers'],
+    goals: ['make testing easy'],
+    non_goals: ['replace production code'],
+  },
+  architecture: {
+    summary: 'Minimal standalone module.',
+    components: ['core-module', 'test-harness'],
+    constraints: [],
+    risks: [],
+  },
+  open_decisions: [],
+  source_refs: [],
+};
+
+describe('STORY-009.3: planningBundleValidationGate', () => {
+  it('STORY-009.3 valid planning bundle passes gate', () =>
+    expect(planningBundleValidationGate(VALID_BUNDLE).ok).toBe(true));
+
+  it('STORY-009.3 gate result has ok and errors fields', () => {
+    const r = planningBundleValidationGate(VALID_BUNDLE);
+    expect(typeof r.ok).toBe('boolean');
+    expect(Array.isArray(r.errors)).toBe(true);
+  });
+
+  // malformed_bundle_rejected
+  it('STORY-009.3 malformed bundle — null rejected', () =>
+    expect(planningBundleValidationGate(null).ok).toBe(false));
+
+  it('STORY-009.3 malformed bundle — string rejected', () =>
+    expect(planningBundleValidationGate('not a bundle').ok).toBe(false));
+
+  it('STORY-009.3 malformed bundle — array rejected', () =>
+    expect(planningBundleValidationGate([]).ok).toBe(false));
+
+  it('STORY-009.3 malformed bundle — missing bundle_id fails', () =>
+    expect(planningBundleValidationGate({ ...VALID_BUNDLE, bundle_id: '' }).ok).toBe(false));
+
+  it('STORY-009.3 malformed bundle — whitespace-only bundle_id fails', () =>
+    expect(planningBundleValidationGate({ ...VALID_BUNDLE, bundle_id: '   ' }).ok).toBe(false));
+
+  it('STORY-009.3 malformed bundle — missing idea_id fails', () =>
+    expect(planningBundleValidationGate({ ...VALID_BUNDLE, idea_id: '' }).ok).toBe(false));
+
+  it('STORY-009.3 malformed bundle — missing prd fails', () =>
+    expect(planningBundleValidationGate({ ...VALID_BUNDLE, prd: null }).ok).toBe(false));
+
+  it('STORY-009.3 malformed bundle — prd missing title fails', () =>
+    expect(planningBundleValidationGate({ ...VALID_BUNDLE, prd: { ...VALID_BUNDLE.prd, title: '' } }).ok).toBe(false));
+
+  it('STORY-009.3 malformed bundle — prd missing problem_statement fails', () =>
+    expect(planningBundleValidationGate({ ...VALID_BUNDLE, prd: { ...VALID_BUNDLE.prd, problem_statement: '' } }).ok).toBe(false));
+
+  it('STORY-009.3 malformed bundle — missing architecture fails', () =>
+    expect(planningBundleValidationGate({ ...VALID_BUNDLE, architecture: null }).ok).toBe(false));
+
+  it('STORY-009.3 malformed bundle — empty components array fails', () =>
+    expect(planningBundleValidationGate({ ...VALID_BUNDLE, architecture: { ...VALID_BUNDLE.architecture, components: [] } }).ok).toBe(false));
+
+  // prose_acceptance_rejected (same rule as STORY-006.1)
+  it('STORY-009.3 prose_acceptance_rejected — prd with no goals and no non_goals fails', () =>
+    expect(planningBundleValidationGate({ ...VALID_BUNDLE, prd: { ...VALID_BUNDLE.prd, goals: [], non_goals: [] } }).ok).toBe(false));
+
+  it('STORY-009.3 prose_acceptance_rejected — prd with goals passes', () =>
+    expect(planningBundleValidationGate({ ...VALID_BUNDLE, prd: { ...VALID_BUNDLE.prd, goals: ['one goal'], non_goals: [] } }).ok).toBe(true));
+
+  it('STORY-009.3 prose_acceptance_rejected — prd with non_goals only passes', () =>
+    expect(planningBundleValidationGate({ ...VALID_BUNDLE, prd: { ...VALID_BUNDLE.prd, goals: [], non_goals: ['one non-goal'] } }).ok).toBe(true));
+
+  it('STORY-009.3 prose_acceptance_rejected — error message references machine-checkable criteria', () => {
+    const r = planningBundleValidationGate({ ...VALID_BUNDLE, prd: { ...VALID_BUNDLE.prd, goals: [], non_goals: [] } });
+    expect(r.errors.some(e => e.includes('machine-checkable'))).toBe(true);
+  });
+
+  // ambiguity_blocks_until_answered
+  it('STORY-009.3 ambiguity_blocks_until_answered — bundle with open_decisions fails', () =>
+    expect(planningBundleValidationGate({
+      ...VALID_BUNDLE,
+      open_decisions: [{ id: 'od-1', question: 'What are the goals?', options: [{ option_id: 'defer', tradeoff: 'defer' }] }],
+    }).ok).toBe(false));
+
+  it('STORY-009.3 ambiguity_blocks_until_answered — error message references unresolved decisions', () => {
+    const r = planningBundleValidationGate({
+      ...VALID_BUNDLE,
+      open_decisions: [{ id: 'od-1', question: 'Goals?', options: [] }],
+    });
+    expect(r.errors.some(e => e.includes('open decision') || e.includes('unresolved'))).toBe(true);
+  });
+
+  it('STORY-009.3 ambiguity_blocks_until_answered — empty open_decisions passes', () =>
+    expect(planningBundleValidationGate({ ...VALID_BUNDLE, open_decisions: [] }).ok).toBe(true));
+
+  it('STORY-009.3 ambiguity_blocks_until_answered — open_decisions not an array fails', () =>
+    expect(planningBundleValidationGate({ ...VALID_BUNDLE, open_decisions: 'pending' }).ok).toBe(false));
+
+  // Issue ordering and determinism
+  it('STORY-009.3 issue ordering deterministic — same invalid input produces same errors', () => {
+    const bad = { ...VALID_BUNDLE, bundle_id: '', idea_id: '', open_decisions: [{ id: 'od-1', question: 'q', options: [] }] };
+    const r1 = planningBundleValidationGate(bad);
+    const r2 = planningBundleValidationGate(bad);
+    expect(r1.errors).toEqual(r2.errors);
+  });
+
+  it('STORY-009.3 same valid bundle produces same gate result', () => {
+    const r1 = planningBundleValidationGate(VALID_BUNDLE);
+    const r2 = planningBundleValidationGate(VALID_BUNDLE);
+    expect(r1.ok).toBe(r2.ok);
+    expect(r1.errors).toEqual(r2.errors);
+  });
+
+  it('STORY-009.3 malformed bundle reports ALL errors, not just first', () => {
+    const bad = { ...VALID_BUNDLE, bundle_id: '', idea_id: '', prd: { ...VALID_BUNDLE.prd, title: '' }, open_decisions: [{ id: 'od-1', question: 'q', options: [] }] };
+    const r = planningBundleValidationGate(bad);
+    expect(r.errors.length).toBeGreaterThan(1);
+  });
+
+  // Safety constraints
+  it('STORY-009.3 no tracker mutation — gate is a pure function with no side effects', () => {
+    const input = JSON.stringify(VALID_BUNDLE);
+    planningBundleValidationGate(VALID_BUNDLE);
+    expect(JSON.stringify(VALID_BUNDLE)).toBe(input);
+  });
+
+  it('STORY-009.3 no LLM call — gate is purely synchronous and deterministic', () => {
+    const results = [planningBundleValidationGate(VALID_BUNDLE), planningBundleValidationGate(VALID_BUNDLE), planningBundleValidationGate(VALID_BUNDLE)];
+    const serialized = results.map(r => JSON.stringify(r));
+    expect(serialized[0]).toBe(serialized[1]);
+    expect(serialized[1]).toBe(serialized[2]);
+  });
 });

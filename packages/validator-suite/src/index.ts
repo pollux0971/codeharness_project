@@ -120,3 +120,57 @@ export function specConformanceGate(input: {
   if (!input.proposal.rollback_notes) errors.push('proposal: missing rollback_notes');
   return { ok: errors.length === 0, errors };
 }
+
+/**
+ * STORY-009.3: Gate that validates a PlanningBundle object before backlog emission.
+ * Deterministically rejects:
+ *   - malformed bundles (missing required fields or invalid structure)
+ *   - prose-only acceptance criteria (prd must have goals or non_goals, same rule as STORY-006.1)
+ *   - bundles with unresolved open decisions (ambiguity blocks backlog emission)
+ * No LLM, no external API, no side effects. Error ordering is deterministic.
+ */
+export function planningBundleValidationGate(bundle: unknown): ValidationResult {
+  const errors: string[] = [];
+
+  // malformed_bundle_rejected: top-level type check
+  if (bundle === null || bundle === undefined || typeof bundle !== 'object' || Array.isArray(bundle)) {
+    return { ok: false, errors: ['bundle must be a non-null object'] };
+  }
+  const b = bundle as Record<string, unknown>;
+
+  if (typeof b.bundle_id !== 'string' || !(b.bundle_id as string).trim()) errors.push('bundle: missing or empty bundle_id');
+  if (typeof b.idea_id !== 'string' || !(b.idea_id as string).trim()) errors.push('bundle: missing or empty idea_id');
+
+  // malformed_bundle_rejected + prose_acceptance_rejected: prd must be structured and machine-checkable
+  const prd = b.prd;
+  if (!prd || typeof prd !== 'object' || Array.isArray(prd)) {
+    errors.push('bundle: missing prd');
+  } else {
+    const p = prd as Record<string, unknown>;
+    if (typeof p.title !== 'string' || !(p.title as string).trim()) errors.push('bundle.prd: missing title');
+    if (typeof p.problem_statement !== 'string' || !(p.problem_statement as string).trim()) errors.push('bundle.prd: missing problem_statement');
+    // prose_acceptance_rejected: same rule as STORY-006.1 — at least one structured criterion required
+    if (!isNonEmptyArray(p.goals) && !isNonEmptyArray(p.non_goals)) {
+      errors.push('bundle.prd: acceptance criteria not machine-checkable — goals or non_goals required');
+    }
+  }
+
+  // malformed_bundle_rejected: architecture must exist with at least one component
+  const arch = b.architecture;
+  if (!arch || typeof arch !== 'object' || Array.isArray(arch)) {
+    errors.push('bundle: missing architecture');
+  } else {
+    const a = arch as Record<string, unknown>;
+    if (!isNonEmptyArray(a.components)) errors.push('bundle.architecture: components must be a non-empty array');
+  }
+
+  // ambiguity_blocks_until_answered: open decisions must all be resolved before emission
+  if (!Array.isArray(b.open_decisions)) {
+    errors.push('bundle: open_decisions must be an array');
+  } else if ((b.open_decisions as unknown[]).length > 0) {
+    const count = (b.open_decisions as unknown[]).length;
+    errors.push(`bundle: ${count} unresolved open decision(s) — resolve all before backlog emission`);
+  }
+
+  return { ok: errors.length === 0, errors };
+}

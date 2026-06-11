@@ -304,6 +304,10 @@ export function generateBacklogFromPlanningBundle(bundle: PlanningBundle): Gener
   if (!Array.isArray(bundle?.architecture?.components) || bundle.architecture.components.length === 0) {
     throw new Error('generateBacklog: architecture.components must have at least one entry');
   }
+  // ambiguity_blocks_until_answered (STORY-009.3): open decisions must be resolved before emission
+  if (Array.isArray(bundle.open_decisions) && bundle.open_decisions.length > 0) {
+    throw new Error(`generateBacklog: bundle has ${bundle.open_decisions.length} unresolved open decision(s) — resolve before backlog emission`);
+  }
 
   checkBundleForSecrets(bundle);
 
