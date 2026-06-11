@@ -1,0 +1,62 @@
+# CodeHarness Settings — user-tunable runtime parameters (VSCode-style).
+#
+# Three-layer precedence (highest wins), exactly like VSCode:
+#   1. story/contract override   (per-story, set in the story contract)
+#   2. workspace settings        (settings.yaml in the target project, gitignored)
+#   3. these defaults            (settings.default.yaml — do not edit; copy to override)
+#
+# Validated at boot against specs/settings.schema.json. An unknown key or an
+# out-of-range value fails boot loudly (same philosophy as stub_registry).
+#
+# SAFETY: settings can only RELAX cost/quality, never weaken a trust boundary.
+# Anything that would open a global gate (real_api_calls, sudo_broker_runtime,
+# bypass_workspace_runtime, stable_promotion) is NOT a setting — it stays a
+# human gate. Those keys are intentionally absent here.
+version: 1
+
+# ---- generation target (was D1, D12) ----
+target:
+  project_type: cli_tool        # cli_tool | web_app | rest_api | library
+  stack: node_ts                # node_ts only for now (D12); others rejected until supported
+
+# ---- budgets (was D7; single source of truth — supersedes scattered caps) ----
+budget:
+  per_story_token_cap: 400000
+  per_run_token_cap: 4000000
+  per_story_call_cap: 30
+  on_exceed: escalate_human     # escalate_human | block_only
+
+# ---- quality bar (was D6) ----
+quality_bar:
+  greenfield: [install, build, test, typecheck]   # subset/superset of the known checks
+  brownfield_strictness: no_new_failures          # no_new_failures | no_coverage_drop | with_perf_budget  (D13)
+
+# ---- model routing preferences (was D4; cannot grant access, only prefer tiers) ----
+model:
+  real_provider_scope: hybrid   # hybrid (Dev/Debugger real) | all | none — capped by the real_api_calls gate
+  escalation_ladder: true       # upgrade tier on repeated validation failure (EPIC-018)
+  cheap_tier_for_trivial: true
+
+# ---- parallelism (was D5) ----
+parallelism:
+  enabled: true
+  max_workers: 4
+  competitive_debug: false      # k-candidate race; cost multiplies — opt in per run
+
+# ---- brownfield (was D14) ----
+brownfield:
+  recovery_depth: profile_plus_architecture   # profile_plus_architecture | full_module_docs
+
+# ---- promotion & delivery (was D8, D9) ----
+delivery:
+  promotion_target: local_stable_dir          # local_stable_dir | git_push_remote | both (D8)
+  human_gate_interface: cli                    # cli | cockpit (D9) — cockpit needs EPIC-016
+
+# ---- notifications (EPIC-019) ----
+notifications:
+  channel: none                 # none | webhook | email
+  notify_on: [escalation, approval_request]
+
+# ---- failure bank scope (was D11) ----
+failure_bank:
+  scope: global                 # global | per_project

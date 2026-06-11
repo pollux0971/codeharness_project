@@ -1,0 +1,194 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CodeHarness Settings",
+  "description": "User-tunable runtime parameters. May relax cost/quality but never weaken a trust boundary; keys that would open a global gate are deliberately not representable.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "target",
+    "budget",
+    "quality_bar",
+    "model",
+    "parallelism",
+    "brownfield",
+    "delivery",
+    "failure_bank"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "project_type": {
+          "enum": [
+            "cli_tool",
+            "web_app",
+            "rest_api",
+            "library"
+          ]
+        },
+        "stack": {
+          "enum": [
+            "node_ts"
+          ]
+        }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "per_story_token_cap": {
+          "type": "integer",
+          "minimum": 1000
+        },
+        "per_run_token_cap": {
+          "type": "integer",
+          "minimum": 1000
+        },
+        "per_story_call_cap": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "on_exceed": {
+          "enum": [
+            "escalate_human",
+            "block_only"
+          ]
+        }
+      }
+    },
+    "quality_bar": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "greenfield": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "install",
+              "build",
+              "test",
+              "typecheck",
+              "lint",
+              "coverage"
+            ]
+          },
+          "minItems": 1
+        },
+        "brownfield_strictness": {
+          "enum": [
+            "no_new_failures",
+            "no_coverage_drop",
+            "with_perf_budget"
+          ]
+        }
+      }
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "real_provider_scope": {
+          "enum": [
+            "hybrid",
+            "all",
+            "none"
+          ]
+        },
+        "escalation_ladder": {
+          "type": "boolean"
+        },
+        "cheap_tier_for_trivial": {
+          "type": "boolean"
+        }
+      }
+    },
+    "parallelism": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "max_workers": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "competitive_debug": {
+          "type": "boolean"
+        }
+      }
+    },
+    "brownfield": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "recovery_depth": {
+          "enum": [
+            "profile_plus_architecture",
+            "full_module_docs"
+          ]
+        }
+      }
+    },
+    "delivery": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "promotion_target": {
+          "enum": [
+            "local_stable_dir",
+            "git_push_remote",
+            "both"
+          ]
+        },
+        "human_gate_interface": {
+          "enum": [
+            "cli",
+            "cockpit"
+          ]
+        }
+      }
+    },
+    "notifications": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "enum": [
+            "none",
+            "webhook",
+            "email"
+          ]
+        },
+        "notify_on": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "escalation",
+              "approval_request"
+            ]
+          }
+        }
+      }
+    },
+    "failure_bank": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "enum": [
+            "global",
+            "per_project"
+          ]
+        }
+      }
+    }
+  }
+}
