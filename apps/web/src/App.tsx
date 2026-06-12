@@ -4,10 +4,20 @@ import { ApprovalQueue } from './ApprovalQueue';
 import { ApprovalCenter, type EscalationData } from './ApprovalCenter';
 import { PipelineBoard } from './PipelineBoard';
 import { IdeaIntake } from './IdeaIntake';
+import { HealthDashboard, type BudgetSnapshot, type GateConfig, type GateAuditEntry } from './HealthDashboard';
 import { MOCK_TRACE_EVENTS } from './mockTrace';
 
 const API = (import.meta as any).env?.VITE_API ?? 'http://127.0.0.1:8787';
 const TRACE_MODE: 'live' | 'mock' = (import.meta as any).env?.VITE_API ? 'live' : 'mock';
+const MOCK_BUDGET_SNAPSHOTS: BudgetSnapshot[] = [
+  { story_id: 'STORY-016.1', calls_used: 4,  calls_budget: 30, tokens_used: 120000, tokens_budget: 400000, killed: false },
+  { story_id: 'STORY-016.2', calls_used: 27, calls_budget: 30, tokens_used: 340000, tokens_budget: 400000, killed: false },
+  { story_id: 'STORY-016.3', calls_used: 30, calls_budget: 30, tokens_used: 400000, tokens_budget: 400000, killed: true },
+];
+const MOCK_GATE_CONFIG: GateConfig = { real_api_calls_enabled: false, kill_switch: false, ci_override: true };
+const MOCK_GATE_AUDIT: GateAuditEntry[] = [
+  { timestamp: '2026-06-13T00:00Z', gate: 'real_api_calls', change: 'enabled→disabled', operator: 'ci-policy' },
+];
 const MOCK_ESCALATIONS: EscalationData[] = [
   { id: 'esc-mock-001', type: 'scope_expansion', story_id: 'STORY-000.1', reason: 'Repair requires writing outside allowed write-set', requested_decision: 'Approve scope expansion or reject the repair.' },
   { id: 'esc-mock-002', type: 'attempt_budget_exceeded', story_id: 'STORY-000.2', reason: 'Developer/Debugger cycle budget exhausted (3/3)', requested_decision: 'Review failure genes and decide whether to retry or abandon.' },
@@ -60,6 +70,8 @@ export function App() {
         <Group t="Pipeline board" />
         <PipelineBoard stories={d?.runState?.stories ?? []} />
       </div>
+      {/* Health dashboard — budget, failure heatmap, gate status */}
+      <HealthDashboardSection />
       <div style={{ display: 'grid', gridTemplateColumns: '340px 1fr 360px' }}>
         {/* Panel A — Skills & Agents */}
         <section data-panel="skills-agents" style={{ padding: 18, borderRight: '1px solid rgba(230,237,243,.1)' }}>
@@ -147,6 +159,29 @@ const Placeholder = ({ label }: { label: string }) => (
     — {label} placeholder —
   </div>
 );
+function HealthDashboardSection() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ padding: '10px 22px', borderBottom: '1px solid rgba(230,237,243,.1)' }}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        style={{ background: 'none', border: '1px solid rgba(91,214,192,.4)', borderRadius: 6, color: '#5BD6C0', padding: '4px 12px', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, cursor: 'pointer' }}
+      >
+        {open ? '✕ Close' : '⬡ Health dashboard'}
+      </button>
+      {open && (
+        <HealthDashboard
+          budgetSnapshots={MOCK_BUDGET_SNAPSHOTS}
+          failureGenes={[]}
+          gateConfig={MOCK_GATE_CONFIG}
+          gateAuditLog={MOCK_GATE_AUDIT}
+        />
+      )}
+    </div>
+  );
+}
+
 function IdeaIntakeToggle() {
   const [open, setOpen] = useState(false);
   return (
