@@ -1,0 +1,18 @@
+{
+  "skill_id": "supervisor.decision-matrix-routing",
+  "agent_role": "supervisor",
+  "description": "Apply decision_matrix.yaml rules: given harness state + story status + attempt counts, return exactly one action (develop / debug / escalate / checkpoint / stop).",
+  "version": "0.1.0",
+  "status": "needs_tests",
+  "entry_documents": ["SKILL.md"],
+  "scripts": ["scripts/evaluate.py"],
+  "tests": ["tests/test_skill.py"],
+  "validation": ["pytest -q tests/"],
+  "memory_file": ".memory.md",
+  "depends_on": ["supervisor.story-contract"],
+  "enhances": [],
+  "provenance": { "source_story": "STORY-014.3", "source_trajectory": "", "created_by": "harness" },
+  "failure_signatures": ["bad|state", "budget|exhausted|not|escalate", "validation|passed|route_debugger"],
+  "last_evaluation": { "passed": 0, "total": 0, "fresh_runs": 0, "pass_rate": 0.0, "at": "" },
+  "leakage_audit": "unrun"
+}

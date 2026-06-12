@@ -1,0 +1,18 @@
+{
+  "skill_id": "supervisor.parallel-set-selection",
+  "agent_role": "supervisor",
+  "description": "Identify safe parallel sets from candidate stories — only parallel_safe stories with non-overlapping write-sets enter the parallel set.",
+  "version": "0.1.0",
+  "status": "needs_tests",
+  "entry_documents": ["SKILL.md"],
+  "scripts": ["scripts/evaluate.py"],
+  "tests": ["tests/test_skill.py"],
+  "validation": ["pytest -q tests/"],
+  "memory_file": ".memory.md",
+  "depends_on": ["supervisor.story-contract"],
+  "enhances": [],
+  "provenance": { "source_story": "STORY-014.3", "source_trajectory": "", "created_by": "harness" },
+  "failure_signatures": ["write-set|overlap", "sequential|in|parallel_set", "unknown|story"],
+  "last_evaluation": { "passed": 0, "total": 0, "fresh_runs": 0, "pass_rate": 0.0, "at": "" },
+  "leakage_audit": "unrun"
+}

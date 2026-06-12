@@ -1,0 +1,18 @@
+{
+  "skill_id": "supervisor.task-packet-composition",
+  "agent_role": "supervisor",
+  "description": "Given a StoryContract, assemble the role-scoped TaskPacket for Developer or Debugger — correct target_agent, bounded context, write-set, acceptance, and attempt budget.",
+  "version": "0.1.0",
+  "status": "needs_tests",
+  "entry_documents": ["SKILL.md"],
+  "scripts": ["scripts/evaluate.py"],
+  "tests": ["tests/test_skill.py"],
+  "validation": ["pytest -q tests/"],
+  "memory_file": ".memory.md",
+  "depends_on": ["supervisor.story-contract"],
+  "enhances": [],
+  "provenance": { "source_story": "STORY-014.3", "source_trajectory": "", "created_by": "harness" },
+  "failure_signatures": ["write-set|widened", "bad|target_agent", "missing|packet_id"],
+  "last_evaluation": { "passed": 0, "total": 0, "fresh_runs": 0, "pass_rate": 0.0, "at": "" },
+  "leakage_audit": "unrun"
+}
