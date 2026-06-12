@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ToolRegistry",
+  "description": "Per-role tool allowlists. Every tool call is checked against this before the Permission Gateway fires.",
+  "type": "object",
+  "required": ["version", "roles"],
+  "properties": {
+    "version": { "type": "integer", "minimum": 1 },
+    "roles": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["allowed_tools"],
+        "properties": {
+          "allowed_tools": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Tool names this role may call. Any tool not listed is denied."
+          },
+          "description": { "type": "string" }
+        }
+      }
+    }
+  }
+}

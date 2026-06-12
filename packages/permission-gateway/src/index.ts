@@ -46,6 +46,46 @@ export interface WorkspaceOracle {
 }
 
 export interface PolicyDecision { decision: Decision; reasons: string[] }
+export interface ValidationResult { ok: boolean; errors: string[] }
+
+export interface ToolRegistryEntry {
+  allowed_tools: string[];
+  description?: string;
+}
+export interface ToolRegistry {
+  version: number;
+  roles: Record<string, ToolRegistryEntry>;
+}
+
+/** Structural validation of the registry config. Call at boot. */
+export function validateToolRegistry(registry: unknown): ValidationResult {
+  const errors: string[] = [];
+  if (typeof registry !== 'object' || registry === null) {
+    return { ok: false, errors: ['registry must be an object'] };
+  }
+  const r = registry as Record<string, unknown>;
+  if (typeof r['version'] !== 'number' || (r['version'] as number) < 1) {
+    errors.push('version must be a number >= 1');
+  }
+  if (typeof r['roles'] !== 'object' || r['roles'] === null || Array.isArray(r['roles'])) {
+    errors.push('roles must be an object');
+  } else {
+    const roles = r['roles'] as Record<string, unknown>;
+    for (const [roleName, entry] of Object.entries(roles)) {
+      if (typeof entry !== 'object' || entry === null) {
+        errors.push(`role '${roleName}' must be an object`);
+        continue;
+      }
+      const e = entry as Record<string, unknown>;
+      if (!Array.isArray(e['allowed_tools'])) {
+        errors.push(`role '${roleName}' must have allowed_tools array`);
+      } else if (!(e['allowed_tools'] as unknown[]).every((t) => typeof t === 'string')) {
+        errors.push(`role '${roleName}' allowed_tools must contain strings`);
+      }
+    }
+  }
+  return { ok: errors.length === 0, errors };
+}
 
 // ---- danger classes (deny regardless of mode) ----
 const SECRET_PATH = /(^|\/)\.env($|\.|\/)|(^|\/)\.ssh(\/|$)|id_rsa|\.pem$|\.key$|\.codex\/auth\.json|\/\.aws\/|\/\.config\/gcloud\//i;
@@ -86,8 +126,19 @@ function modeRule(req: ToolRequest, inWriteSet: boolean): PolicyDecision {
  * The ordered pipeline. First decisive step wins. See PERMISSION_POLICY.md.
  */
 export function evaluateToolRequest(
-  req: ToolRequest, contract: StoryContractView, oracle: WorkspaceOracle
+  req: ToolRequest,
+  contract: StoryContractView,
+  oracle: WorkspaceOracle,
+  registry?: ToolRegistry,
+  role?: string,
 ): PolicyDecision {
+  // 0. tool-registry allowlist check (before all other checks)
+  if (registry && role) {
+    const entry = registry.roles[role];
+    if (entry && !entry.allowed_tools.includes(req.tool)) {
+      return { decision: 'deny', reasons: [`tool not in role allowlist: ${req.tool}`] };
+    }
+  }
   const cmd = req.command ?? '';
   const resolved = (req.targetPaths ?? []).map(p => oracle.resolveRealPath(p));
 

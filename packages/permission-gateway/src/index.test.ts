@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { evaluateToolRequest, ToolRequest, StoryContractView, WorkspaceOracle } from './index';
+import { evaluateToolRequest, validateToolRegistry, ToolRequest, StoryContractView, WorkspaceOracle, ToolRegistry } from './index';
 
 const contract: StoryContractView = {
   allowedWriteSet: ['codeharness/packages/foo/src/**', 'docs/**', '*.config.ts'],
@@ -80,5 +80,56 @@ describe('permission-gateway', () => {
   });
   it('scoped_secret_handle_returns_ask', () => {
     expect(evaluateToolRequest(req({ mode: 'accept_edits', tool: 'read_file', usesSecretHandle: true, targetPaths: ['docs/a.md'] }), contract, oracle()).decision).toBe('ask');
+  });
+});
+
+const testRegistry: ToolRegistry = {
+  version: 1,
+  roles: {
+    developer: { allowed_tools: ['read_file', 'write_file', 'apply_patch', 'shell', 'run_tests'] },
+    planning_steward: { allowed_tools: ['read_file', 'search_files'] },
+  },
+};
+
+describe('tool-registry', () => {
+  it('tools_declared_per_role', () => {
+    expect(validateToolRegistry(testRegistry).ok).toBe(true);
+  });
+
+  it('undeclared_tool_call_denied', () => {
+    const r = evaluateToolRequest(
+      req({ mode: 'accept_edits', tool: 'secret_dump', isWrite: false }),
+      contract, oracle(), testRegistry, 'developer',
+    );
+    expect(r.decision).toBe('deny');
+    expect(r.reasons.join(' ')).toMatch(/allowlist/);
+  });
+
+  it('tool_calls_pass_permission_gateway', () => {
+    const r = evaluateToolRequest(
+      req({ mode: 'accept_edits', tool: 'read_file', isWrite: false, targetPaths: ['docs/a.md'] }),
+      contract, oracle(), testRegistry, 'developer',
+    );
+    expect(r.decision).toBe('allow');
+  });
+
+  it('registry_schema_validated_at_boot', () => {
+    expect(validateToolRegistry({ version: 1 }).ok).toBe(false);
+    expect(validateToolRegistry({ version: 1 }).errors.join(' ')).toMatch(/roles/);
+  });
+
+  it('planning_steward_denied_write_file', () => {
+    const r = evaluateToolRequest(
+      req({ mode: 'accept_edits', tool: 'write_file', isWrite: true, targetPaths: ['docs/a.md'] }),
+      contract, oracle(), testRegistry, 'planning_steward',
+    );
+    expect(r.decision).toBe('deny');
+  });
+
+  it('no_registry_preserves_existing_behaviour', () => {
+    expect(evaluateToolRequest(
+      req({ mode: 'plan', tool: 'read_file', targetPaths: ['docs/x.md'] }),
+      contract, oracle(),
+    ).decision).toBe('allow');
   });
 });

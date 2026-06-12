@@ -1,0 +1,16 @@
+version: 1
+roles:
+  planning_steward:
+    description: "Read-only planning; no mutations."
+    allowed_tools: [read_file, search_files, list_directory, grep]
+  supervisor:
+    description: "Contract assembly and routing; no code mutations."
+    allowed_tools: [read_file, search_files, list_directory, grep, validate_schema]
+  developer:
+    description: "Full patch workflow including apply."
+    allowed_tools: [read_file, write_file, apply_patch, shell, search_files,
+                    list_directory, grep, validate_schema, run_tests, typecheck]
+  debugger:
+    description: "Diagnosis and repair; same as developer."
+    allowed_tools: [read_file, write_file, apply_patch, shell, search_files,
+                    list_directory, grep, validate_schema, run_tests, typecheck]
