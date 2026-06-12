@@ -108,3 +108,6 @@ export const TaskCreate = (g: TaskGraph, i: TaskCreateInput) => g.create(i);
 export const TaskUpdate = (g: TaskGraph, id: string, p: TaskUpdateInput) => g.update(id, p);
 export const TaskList = (g: TaskGraph, f?: { status?: TaskStatus }) => g.list(f);
 export const TaskGet = (g: TaskGraph, id: string) => g.get(id);
+
+export type { SchedulerResult, SchedulerRunOptions } from './scheduler.js';
+export { runSequentialScheduler } from './scheduler.js';

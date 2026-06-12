@@ -123,7 +123,11 @@ importers:
 
   packages/supervisor-runtime: {}
 
-  packages/task-graph: {}
+  packages/task-graph:
+    dependencies:
+      '@codeharness/harness-core':
+        specifier: workspace:*
+        version: link:../harness-core
 
   packages/tool-executor: {}
 

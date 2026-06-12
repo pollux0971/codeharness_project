@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { TaskGraph, legalTransition, validateFilesWithinScope } from './index';
+import { TaskGraph, legalTransition, validateFilesWithinScope, runSequentialScheduler } from './index';
+import type { StoryRecord } from '@codeharness/harness-core';
 
 const scope = { allowedWriteSet: ['codeharness/packages/foo/src/**'] };
 const g = () => new TaskGraph('STORY-X', 'C-X', scope);
@@ -59,4 +60,79 @@ describe('task-graph', () => {
   });
   it('legal_transition_table_blocks_done_to_pending', () => expect(legalTransition('done', 'pending')).toBe(false));
   it('validate_files_within_scope_flags_outside', () => expect(validateFilesWithinScope(['x/y.ts'], scope).length).toBe(1));
+});
+
+// ── Story-scheduler tests ─────────────────────────────────────────────────────
+
+function makeStory(id: string, deps: string[] = []): StoryRecord {
+  return {
+    story_id: id, epic_id: 'EPIC-000', depends_on: deps,
+    parallelism_class: 'sequential', status: 'todo',
+    attempts: 0, attempt_budget: 3,
+    branch: null, last_action: null, last_result: null,
+    last_validation: null, blocked_reason: null,
+  };
+}
+const alwaysPass  = async (_s: StoryRecord) => true;
+const alwaysFail  = async (_s: StoryRecord) => false;
+const fakeCheckpoint = async (s: StoryRecord) => ({
+  story_id: s.story_id, branch: 'test', commit_sha: 'abc', checkpointed_at: new Date().toISOString(),
+});
+
+describe('story-scheduler', () => {
+  it('stories_execute_in_dependency_order', async () => {
+    const order: string[] = [];
+    const A = makeStory('STORY-A');
+    const B = makeStory('STORY-B', ['STORY-A']);
+    const run = async (s: StoryRecord) => { order.push(s.story_id); return true; };
+    await runSequentialScheduler({ stories: [B, A], runInnerLoop: run, onCheckpoint: fakeCheckpoint });
+    expect(order).toEqual(['STORY-A', 'STORY-B']);
+  });
+
+  it('per_story_budgets_enforced', async () => {
+    const A = makeStory('STORY-A');
+    const B = makeStory('STORY-B', ['STORY-A']);
+    const result = await runSequentialScheduler({
+      stories: [A, B], runInnerLoop: alwaysFail, onCheckpoint: fakeCheckpoint,
+    });
+    expect(result.outcome).toBe('escalated');
+    expect((result as { escalated_story: string }).escalated_story).toBe('STORY-A');
+    expect(B.status).toBe('todo');
+  });
+
+  it('scheduler_halts_on_escalation', async () => {
+    const A = makeStory('STORY-A');
+    const B = makeStory('STORY-B');
+    let bRan = false;
+    const run = async (s: StoryRecord) => {
+      if (s.story_id === 'STORY-B') bRan = true;
+      return false;
+    };
+    const result = await runSequentialScheduler({
+      stories: [A, B], runInnerLoop: run, onCheckpoint: fakeCheckpoint,
+    });
+    expect(result.outcome).toBe('escalated');
+    expect(bRan).toBe(false);
+  });
+
+  it('checkpoint_per_story_commit', async () => {
+    const checkpoints: string[] = [];
+    const A = makeStory('STORY-A');
+    const B = makeStory('STORY-B', ['STORY-A']);
+    const checkpoint = async (s: StoryRecord) => {
+      checkpoints.push(s.story_id);
+      return fakeCheckpoint(s);
+    };
+    await runSequentialScheduler({ stories: [A, B], runInnerLoop: alwaysPass, onCheckpoint: checkpoint });
+    expect(checkpoints).toEqual(['STORY-A', 'STORY-B']);
+  });
+
+  it('all_done_when_backlog_completes', async () => {
+    const stories = [makeStory('STORY-A'), makeStory('STORY-B', ['STORY-A'])];
+    const result = await runSequentialScheduler({
+      stories, runInnerLoop: alwaysPass, onCheckpoint: fakeCheckpoint,
+    });
+    expect(result.outcome).toBe('all_done');
+    expect(result.completed).toEqual(['STORY-A', 'STORY-B']);
+  });
 });
