@@ -43,3 +43,7 @@ budgets:
   per_story_token_cap: 400000
   per_run_token_cap: 4000000
   on_exceed: escalate_human
+
+tier_upgrade_policy:
+  upgrade_after_n_failures: 2   # consecutive validation failures before tier upgrade
+  hard_gene_starts_strong: true # known hard signatures → start at strong tier immediately

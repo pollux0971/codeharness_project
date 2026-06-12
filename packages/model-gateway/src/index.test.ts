@@ -20,10 +20,14 @@ import {
   validateStructuredOutput,
   validateModelRegistry,
   parseModelRef,
+  buildTierLadder,
+  selectTierForAttempt,
   type DeveloperOutput,
   type RealProviderHttpClient,
   type RoutingConfig,
   type ModelRegistryConfig,
+  type TierLadder,
+  type TierSelectionContext,
 } from './index';
 
 const goodDeveloperOutput: DeveloperOutput = {
@@ -299,6 +303,61 @@ const validCfg: ModelRegistryConfig = {
     developer: { primary: 'codex/gpt-5.5-codex', fallbacks: ['deepseek/deepseek-v4-pro'] },
   },
 };
+
+const simpleLadder: TierLadder = {
+  agent: 'developer',
+  entries: [
+    { tier: 'cheap',  provider_ref: 'deepseek/deepseek-v4-flash' },
+    { tier: 'mid',    provider_ref: 'deepseek/deepseek-v4-pro' },
+    { tier: 'strong', provider_ref: 'codex/gpt-5.5-codex' },
+  ],
+};
+const policy = { upgrade_after_n_failures: 2, hard_gene_starts_strong: true };
+
+describe('tier-ladder', () => {
+  it('second_validation_failure_upgrades_tier', () => {
+    const ctx: TierSelectionContext = { consecutiveValidationFailures: 2, matchingGenes: [], upgradePolicy: policy };
+    const entry = selectTierForAttempt(simpleLadder, ctx);
+    expect(['mid', 'strong']).toContain(entry.tier);
+  });
+
+  it('failure_gene_match_starts_at_strong_tier', () => {
+    const ctx: TierSelectionContext = {
+      consecutiveValidationFailures: 0,
+      matchingGenes: [{ matching_signal: 'test|critical', failure_type: 'test_failure' }],
+      upgradePolicy: policy,
+    };
+    expect(selectTierForAttempt(simpleLadder, ctx).tier).toBe('strong');
+  });
+
+  it('ladder_respects_budget_guard', async () => {
+    const guard = new BudgetGuard('S-1', { maxCallsPerStory: 0, maxTokensPerStory: 0, onExceed: 'escalate' });
+    const p = createScriptedProvider('p', [{ case_id: 'c', match: {}, output: goodDeveloperOutput }]);
+    const r = await guardedCall(guard, p, req);
+    expect(r.ok).toBe(false);
+  });
+
+  it('first_failure_stays_at_cheap', () => {
+    const ctx: TierSelectionContext = { consecutiveValidationFailures: 1, matchingGenes: [], upgradePolicy: policy };
+    expect(selectTierForAttempt(simpleLadder, ctx).tier).toBe('cheap');
+  });
+
+  it('ladder_built_from_routing_config', () => {
+    const routingAgents = { developer: { primary: 'codex/gpt-5.5-codex', fallbacks: ['deepseek/deepseek-v4-flash'] } };
+    const providerModels = {
+      codex:    [{ name: 'gpt-5.5-codex',     tier: 'strong' as const }],
+      deepseek: [{ name: 'deepseek-v4-flash', tier: 'cheap'  as const }],
+    };
+    const ladder = buildTierLadder('developer', routingAgents, providerModels);
+    expect(ladder.entries.length).toBeGreaterThan(0);
+    expect(ladder.entries[0].tier).toBe('cheap');
+  });
+
+  it('no_genes_no_upgrade_at_zero_failures', () => {
+    const ctx: TierSelectionContext = { consecutiveValidationFailures: 0, matchingGenes: [], upgradePolicy: policy };
+    expect(selectTierForAttempt(simpleLadder, ctx).tier).toBe('cheap');
+  });
+});
 
 describe('model-registry', () => {
   it('routing_references_resolve_to_providers', () => {

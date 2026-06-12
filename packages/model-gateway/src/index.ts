@@ -460,3 +460,91 @@ export async function guardedCall(
   }
   return result;
 }
+
+// ── Dynamic model-tier ladder (STORY-018.2) ───────────────────────────────
+
+export type ModelTier = 'cheap' | 'mid' | 'strong';
+
+export interface TierLadderEntry {
+  tier: ModelTier;
+  provider_ref: string;
+}
+
+export interface TierLadder {
+  agent: string;
+  entries: TierLadderEntry[];
+}
+
+export interface TierUpgradePolicy {
+  upgrade_after_n_failures: number;
+  hard_gene_starts_strong: boolean;
+}
+
+export interface TierSelectionContext {
+  consecutiveValidationFailures: number;
+  matchingGenes: { matching_signal: string; failure_type: string }[];
+  upgradePolicy: TierUpgradePolicy;
+}
+
+const TIER_ORDER: ModelTier[] = ['cheap', 'mid', 'strong'];
+
+function tierIndex(t: ModelTier): number {
+  return TIER_ORDER.indexOf(t);
+}
+
+export function buildTierLadder(
+  agent: string,
+  routingAgents: Record<string, { primary: string; fallbacks?: string[] }>,
+  providerModels: Record<string, { name: string; tier: ModelTier }[]>,
+): TierLadder {
+  const agentCfg = routingAgents[agent];
+  if (!agentCfg) return { agent, entries: [] };
+
+  const refs = [agentCfg.primary, ...(agentCfg.fallbacks ?? [])];
+  const seen = new Set<string>();
+  const entries: TierLadderEntry[] = [];
+
+  for (const ref of refs) {
+    if (seen.has(ref)) continue;
+    seen.add(ref);
+    const slash = ref.indexOf('/');
+    if (slash === -1) continue;
+    const providerId = ref.slice(0, slash);
+    const modelName = ref.slice(slash + 1);
+    const models = providerModels[providerId];
+    const found = models?.find(m => m.name === modelName);
+    const tier: ModelTier = found ? found.tier : 'mid';
+    entries.push({ tier, provider_ref: ref });
+  }
+
+  entries.sort((a, b) => tierIndex(a.tier) - tierIndex(b.tier));
+  return { agent, entries };
+}
+
+export function selectTierForAttempt(
+  ladder: TierLadder,
+  ctx: TierSelectionContext,
+): TierLadderEntry {
+  const entries = ladder.entries;
+  if (entries.length === 0) {
+    return { tier: 'cheap', provider_ref: '' };
+  }
+
+  const strongestEntry = entries[entries.length - 1];
+  const cheapestEntry = entries[0];
+
+  if (ctx.matchingGenes.length > 0 && ctx.upgradePolicy.hard_gene_starts_strong) {
+    return strongestEntry;
+  }
+
+  if (ctx.consecutiveValidationFailures >= ctx.upgradePolicy.upgrade_after_n_failures) {
+    // upgrade one tier from cheapest
+    const baseTierIdx = tierIndex(cheapestEntry.tier);
+    const targetTierIdx = Math.min(baseTierIdx + 1, TIER_ORDER.length - 1);
+    const targetTier = TIER_ORDER[targetTierIdx];
+    const upgraded = entries.find(e => tierIndex(e.tier) >= targetTierIdx);
+    return upgraded ?? strongestEntry;
+  }
+
+  return cheapestEntry;
+}
