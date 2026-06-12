@@ -275,6 +275,58 @@ export function validateTaskClassBundle(story: TaskClassBundleInput): TaskClassV
   return { ok: errors.length === 0, errors };
 }
 
+// ── STORY-020.4: Brownfield validator — baseline-relative quality bar ─────────
+
+export interface TestResult {
+  name: string;
+  passed: boolean;
+  output?: string;
+}
+
+export interface TestBaseline {
+  captured_at: string;
+  passing: string[];
+  failing: string[];
+  total: number;
+}
+
+export interface BaselineRunner {
+  runTests(): Promise<TestResult[]>;
+}
+
+export interface BrownfieldValidationResult {
+  ok: boolean;
+  new_failures: string[];
+  flaky_candidates: string[];
+  baseline_failures: string[];
+  errors: string[];
+}
+
+export async function captureBaseline(runner: BaselineRunner): Promise<TestBaseline> {
+  const results = await runner.runTests();
+  const passing = results.filter(r => r.passed).map(r => r.name);
+  const failing = results.filter(r => !r.passed).map(r => r.name);
+  return { captured_at: new Date().toISOString(), passing, failing, total: results.length };
+}
+
+export async function validateBrownfieldChange(
+  baseline: TestBaseline,
+  runner: BaselineRunner
+): Promise<BrownfieldValidationResult> {
+  const post = await captureBaseline(runner);
+  const new_failures = post.failing.filter(t => baseline.passing.includes(t));
+  const flaky_candidates = post.passing.filter(t => baseline.failing.includes(t));
+  return {
+    ok: new_failures.length === 0,
+    new_failures,
+    flaky_candidates,
+    baseline_failures: baseline.failing,
+    errors: [],
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
  * STORY-009.3: Gate that validates a PlanningBundle object before backlog emission.
  * Deterministically rejects:

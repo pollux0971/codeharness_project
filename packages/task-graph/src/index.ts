@@ -116,6 +116,19 @@ export function isCompetitiveDebugEnabled(story: { competitive_debug?: boolean }
   return story.competitive_debug === true;
 }
 
+// ── STORY-020.3: Hot-file detection ──────────────────────────────────────────
+
+/** Returns file paths that appear in 2+ stories' write-sets. */
+export function detectHotFiles(stories: { allowed_write_set?: string[] }[]): string[] {
+  const counts = new Map<string, number>();
+  for (const story of stories) {
+    for (const file of story.allowed_write_set ?? []) {
+      counts.set(file, (counts.get(file) ?? 0) + 1);
+    }
+  }
+  return Array.from(counts.entries()).filter(([, n]) => n >= 2).map(([f]) => f);
+}
+
 export type { SchedulerResult, SchedulerRunOptions, ParallelSchedulerOptions, IsolationPool } from './scheduler.js';
 export { runSequentialScheduler, runParallelScheduler } from './scheduler.js';
 export type { SpawnCandidate, SpawnPlan } from './spawn-plan.js';

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { TaskGraph, legalTransition, validateFilesWithinScope, runSequentialScheduler, runParallelScheduler, computeSpawnPlan, recordSpawnPlan, isCompetitiveDebugEnabled } from './index';
+import { TaskGraph, legalTransition, validateFilesWithinScope, runSequentialScheduler, runParallelScheduler, computeSpawnPlan, recordSpawnPlan, isCompetitiveDebugEnabled, detectHotFiles } from './index';
 import type { IsolationPool, SpawnCandidate } from './index';
 import type { StoryRecord } from '@codeharness/harness-core';
 import { readJsonl } from '@codeharness/event-log';
@@ -217,6 +217,26 @@ describe('competitive-debug-flag', () => {
 
   it('flag_off_when_explicitly_false', () => {
     expect(isCompetitiveDebugEnabled({ competitive_debug: false })).toBe(false);
+  });
+});
+
+// ── STORY-020.3: hot-files detection ─────────────────────────────────────────
+
+describe('hot-files', () => {
+  it('detect_hot_files_finds_shared_paths', () => {
+    const result = detectHotFiles([
+      { allowed_write_set: ['src/a.ts', 'src/b.ts'] },
+      { allowed_write_set: ['src/a.ts', 'test/x.ts'] },
+    ]);
+    expect(result).toContain('src/a.ts');
+    expect(result).not.toContain('src/b.ts');
+  });
+
+  it('detect_hot_files_empty_when_disjoint', () => {
+    expect(detectHotFiles([
+      { allowed_write_set: ['src/a.ts'] },
+      { allowed_write_set: ['src/b.ts'] },
+    ])).toHaveLength(0);
   });
 });
 

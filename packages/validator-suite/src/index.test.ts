@@ -6,7 +6,8 @@ import {
   runQualityBar, validateQualityBar, DEFAULT_QUALITY_BAR,
   runIntegrationValidation,
   validateTaskClassBundle,
-  type QualityBarConfig, type QualityBarRunner,
+  captureBaseline, validateBrownfieldChange,
+  type QualityBarConfig, type QualityBarRunner, type TestResult, type BaselineRunner,
 } from './index';
 
 const goodContract = {
@@ -373,5 +374,75 @@ describe('task-class-validation', () => {
   it('no_task_class_passes', () => {
     const story = { story_id: 'X', depends_on: [], allowed_write_set: ['src/**'], parallelism_class: 'sequential' };
     expect(validateTaskClassBundle(story as any).ok).toBe(true);
+  });
+});
+
+// ── STORY-020.4: brownfield-validator ────────────────────────────────────────
+
+function makeBaselineRunner(results: TestResult[]): BaselineRunner {
+  return { runTests: async () => results };
+}
+
+describe('brownfield-validator', () => {
+  it('baseline_captured_before_first_change', async () => {
+    const runner = makeBaselineRunner([
+      { name: 'test-A', passed: true },
+      { name: 'test-B', passed: true },
+      { name: 'test-C', passed: false },
+    ]);
+    const baseline = await captureBaseline(runner);
+    expect(baseline.passing).toContain('test-A');
+    expect(baseline.passing).toContain('test-B');
+    expect(baseline.failing).toContain('test-C');
+    expect(baseline.total).toBe(3);
+  });
+
+  it('post_change_no_new_failures_enforced', async () => {
+    const baseline = await captureBaseline(makeBaselineRunner([
+      { name: 'test-A', passed: true },
+      { name: 'test-B', passed: true },
+    ]));
+    const result = await validateBrownfieldChange(baseline, makeBaselineRunner([
+      { name: 'test-A', passed: false },
+      { name: 'test-B', passed: true },
+    ]));
+    expect(result.ok).toBe(false);
+    expect(result.new_failures).toContain('test-A');
+  });
+
+  it('baseline_relative_quality_bar_for_brownfield', async () => {
+    const baseline = await captureBaseline(makeBaselineRunner([
+      { name: 'test-A', passed: true },
+      { name: 'test-B', passed: false },
+    ]));
+    const result = await validateBrownfieldChange(baseline, makeBaselineRunner([
+      { name: 'test-A', passed: true },
+      { name: 'test-B', passed: false },
+    ]));
+    expect(result.ok).toBe(true);
+    expect(result.baseline_failures).toContain('test-B');
+  });
+
+  it('flaky_baseline_failures_flagged_not_masked', async () => {
+    const baseline = await captureBaseline(makeBaselineRunner([
+      { name: 'test-C', passed: false },
+    ]));
+    const result = await validateBrownfieldChange(baseline, makeBaselineRunner([
+      { name: 'test-C', passed: true },
+    ]));
+    expect(result.flaky_candidates).toContain('test-C');
+  });
+
+  it('all_new_pass_no_new_failures', async () => {
+    const baseline = await captureBaseline(makeBaselineRunner([
+      { name: 'test-A', passed: true },
+      { name: 'test-B', passed: true },
+    ]));
+    const result = await validateBrownfieldChange(baseline, makeBaselineRunner([
+      { name: 'test-A', passed: true },
+      { name: 'test-B', passed: true },
+    ]));
+    expect(result.ok).toBe(true);
+    expect(result.new_failures).toHaveLength(0);
   });
 });

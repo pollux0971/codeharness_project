@@ -26,6 +26,7 @@ import {
   flagTestAuthorship,
   recordTestIntegrity,
   sendNotification,
+  enrichBrownfieldStory,
   type HarnessState,
   type StoryRecord,
   type RunBudget,
@@ -34,6 +35,7 @@ import {
   type NotificationConfig,
   type NotificationPayload,
   type NotificationHttpClient,
+  type BrownfieldCodeGraphClient,
 } from './index.js';
 import { readJsonl } from '@codeharness/event-log';
 
@@ -692,5 +694,44 @@ describe('notifications', () => {
     const r = await sendNotification(escalationPayload, enabledWebhookConfig(), flaky);
     expect(r.ok).toBe(true);
     expect(attempts).toBe(3);
+  });
+});
+
+// ── STORY-020.3: brownfield-enrichment ───────────────────────────────────────
+
+const brownfieldRecord = (pclass: StoryRecord['parallelism_class'] = 'parallel_safe') => ({
+  story_id: 'S-1', epic_id: 'E-1', depends_on: [],
+  parallelism_class: pclass, status: 'todo' as const,
+  attempts: 0, attempt_budget: 3,
+  branch: null, last_action: null, last_result: null, last_validation: null, blocked_reason: null,
+  task_class: 'brownfield' as const,
+  allowed_write_set: ['src/a.ts'],
+});
+
+const impactClient = (files: string[]): BrownfieldCodeGraphClient => ({
+  async query() { return { impacted_files: files }; },
+});
+
+describe('brownfield-enrichment', () => {
+  it('brownfield_write_set_derived_from_impact_set', async () => {
+    const enriched = await enrichBrownfieldStory(brownfieldRecord(), { codegraphClient: impactClient(['src/b.ts']) });
+    expect(enriched.allowed_write_set).toContain('src/b.ts');
+  });
+
+  it('hot_file_overlap_restricts_parallelism', async () => {
+    const enriched = await enrichBrownfieldStory(brownfieldRecord(), { hotFiles: ['src/a.ts'] });
+    expect(enriched.parallelism_class).toBe('sequential');
+  });
+
+  it('public_api_or_schema_change_forced_exclusive', async () => {
+    const story = { ...brownfieldRecord(), public_api_constraint: { frozen_paths: ['src/api/**'], reason: 'published' } };
+    const enriched = await enrichBrownfieldStory(story);
+    expect(enriched.parallelism_class).toBe('exclusive');
+  });
+
+  it('greenfield_packets_unchanged', async () => {
+    const gf = { ...brownfieldRecord(), task_class: 'greenfield' as const };
+    const enriched = await enrichBrownfieldStory(gf);
+    expect(enriched).toBe(gf);
   });
 });

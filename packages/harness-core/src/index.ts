@@ -457,6 +457,55 @@ export function recordReviewDecision(
   };
 }
 
+// ── STORY-020.3: Brownfield-aware task-packet composition ─────────────────────
+
+/** Minimal codegraph client interface (structural — compatible with @codeharness/codegraph-adapter). */
+export interface BrownfieldCodeGraphClient {
+  query(q: { operation: string; target: string; readScope?: string[] }): Promise<{
+    impacted_files?: string[];
+  }>;
+}
+
+export interface StoryEnrichmentOptions {
+  codegraphClient?: BrownfieldCodeGraphClient;
+  hotFiles?: string[];
+}
+
+type BrownfieldStoryInput = StoryRecord & {
+  task_class?: string;
+  public_api_constraint?: { frozen_paths: string[]; reason: string };
+  allowed_write_set?: string[];
+};
+
+export async function enrichBrownfieldStory(
+  story: BrownfieldStoryInput,
+  opts: StoryEnrichmentOptions = {}
+): Promise<BrownfieldStoryInput> {
+  if (story.task_class !== 'brownfield') return story;
+
+  const enriched: BrownfieldStoryInput = { ...story };
+
+  if (story.public_api_constraint) {
+    enriched.parallelism_class = 'exclusive';
+  }
+
+  if (opts.codegraphClient) {
+    const files = story.allowed_write_set ?? [];
+    const raw = await opts.codegraphClient.query({ operation: 'impact', target: files.join(',') });
+    enriched.allowed_write_set = raw.impacted_files ?? files;
+  }
+
+  if (opts.hotFiles && opts.hotFiles.length > 0) {
+    const writeSet = enriched.allowed_write_set ?? [];
+    const hasOverlap = writeSet.some(f => opts.hotFiles!.includes(f));
+    if (hasOverlap && enriched.parallelism_class !== 'exclusive') {
+      enriched.parallelism_class = 'sequential';
+    }
+  }
+
+  return enriched;
+}
+
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
 /** Minimal glob matcher (supports ** and * wildcards). */
