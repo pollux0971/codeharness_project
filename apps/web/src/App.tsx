@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { TraceViewer } from './TraceViewer';
 import { ApprovalQueue } from './ApprovalQueue';
 import { ApprovalCenter, type EscalationData } from './ApprovalCenter';
+import { PipelineBoard } from './PipelineBoard';
 import { MOCK_TRACE_EVENTS } from './mockTrace';
 
 const API = (import.meta as any).env?.VITE_API ?? 'http://127.0.0.1:8787';
@@ -51,6 +52,11 @@ export function App() {
           </span>
         )}
       </header>
+      {/* Pipeline board — story cards over state-machine lanes */}
+      <div style={{ padding: '0 22px', borderBottom: '1px solid rgba(230,237,243,.1)' }}>
+        <Group t="Pipeline board" />
+        <PipelineBoard stories={d?.runState?.stories ?? []} />
+      </div>
       <div style={{ display: 'grid', gridTemplateColumns: '340px 1fr 360px' }}>
         {/* Panel A — Skills & Agents */}
         <section data-panel="skills-agents" style={{ padding: 18, borderRight: '1px solid rgba(230,237,243,.1)' }}>
