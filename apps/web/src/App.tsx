@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { TraceViewer } from './TraceViewer';
 import { ApprovalQueue } from './ApprovalQueue';
+import { MOCK_TRACE_EVENTS } from './mockTrace';
 
 const API = (import.meta as any).env?.VITE_API ?? 'http://127.0.0.1:8787';
+const TRACE_MODE: 'live' | 'mock' = (import.meta as any).env?.VITE_API ? 'live' : 'mock';
 const ROLE: Record<string, string> = {
   planning_steward: '#8AB4F8', supervisor: '#C792EA', developer: '#5BD6C0',
   debugger: '#F2A65A', shared: '#9FB0BF', harness: '#9FB0BF', validator: '#7EE081',
@@ -69,8 +71,8 @@ export function App() {
         <section data-panel="conversation" style={{ padding: 18, borderRight: '1px solid rgba(230,237,243,.1)' }}>
           <Eyebrow n="B" t="Conversation — agent dialogue" />
           {!d && !err && <Placeholder label="conversation" />}
-          <Group t="Trace events (mock)" />
-          <TraceViewer />
+          <Group t="Trace events" />
+          <TraceViewer mode={TRACE_MODE} mockEvents={MOCK_TRACE_EVENTS} />
           {d && d.conv.messages.map((m: any) => (
             <div key={m.seq} style={{ borderLeft: '1px solid rgba(230,237,243,.1)', paddingLeft: 16, paddingBottom: 15, marginLeft: 6 }}>
               <div style={{ ...mono, fontSize: 11.5 }}>

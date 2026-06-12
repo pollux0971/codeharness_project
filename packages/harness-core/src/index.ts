@@ -11,6 +11,15 @@
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
+/** UI-facing trace event type for the TraceViewer component. */
+export interface TraceEvent {
+  event_id: string;
+  type: string;
+  story_id?: string;
+  payload: Record<string, unknown>;
+  recorded_at: string;
+}
+
 export type StoryStatus =
   | 'todo' | 'in_progress' | 'validating' | 'debugging'
   | 'passed' | 'checkpointed' | 'blocked' | 'escalated' | 'done';
