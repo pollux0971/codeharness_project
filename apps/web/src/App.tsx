@@ -5,6 +5,7 @@ import { ApprovalCenter, type EscalationData } from './ApprovalCenter';
 import { PipelineBoard } from './PipelineBoard';
 import { IdeaIntake } from './IdeaIntake';
 import { HealthDashboard, type BudgetSnapshot, type GateConfig, type GateAuditEntry } from './HealthDashboard';
+import { ProjectPreview, type ProjectFile, type FileDiff, type PromotionHistoryEntry } from './ProjectPreview';
 import { MOCK_TRACE_EVENTS } from './mockTrace';
 
 const API = (import.meta as any).env?.VITE_API ?? 'http://127.0.0.1:8787';
@@ -17,6 +18,16 @@ const MOCK_BUDGET_SNAPSHOTS: BudgetSnapshot[] = [
 const MOCK_GATE_CONFIG: GateConfig = { real_api_calls_enabled: false, kill_switch: false, ci_override: true };
 const MOCK_GATE_AUDIT: GateAuditEntry[] = [
   { timestamp: '2026-06-13T00:00Z', gate: 'real_api_calls', change: 'enabled→disabled', operator: 'ci-policy' },
+];
+const MOCK_PROJECT_FILES: ProjectFile[] = [
+  { path: 'src/index.ts', kind: 'file' },
+  { path: 'src/lib.ts',   kind: 'file' },
+];
+const MOCK_PROJECT_DIFFS: FileDiff[] = [
+  { path: 'src/index.ts', additions: 4, deletions: 1, patch: '+export { run } from "./lib";\n context line\n-// old\n' },
+];
+const MOCK_PROMO_HISTORY: PromotionHistoryEntry[] = [
+  { promotion_id: 'promo-2026-06-13', promoted_at: '2026-06-13T00:00Z', story_ids_promoted: ['STORY-016.1', 'STORY-016.2'], isLatest: true },
 ];
 const MOCK_ESCALATIONS: EscalationData[] = [
   { id: 'esc-mock-001', type: 'scope_expansion', story_id: 'STORY-000.1', reason: 'Repair requires writing outside allowed write-set', requested_decision: 'Approve scope expansion or reject the repair.' },
@@ -72,6 +83,8 @@ export function App() {
       </div>
       {/* Health dashboard — budget, failure heatmap, gate status */}
       <HealthDashboardSection />
+      {/* Project preview — file tree, diff, iframe preview, promotion history */}
+      <ProjectPreviewSection />
       <div style={{ display: 'grid', gridTemplateColumns: '340px 1fr 360px' }}>
         {/* Panel A — Skills & Agents */}
         <section data-panel="skills-agents" style={{ padding: 18, borderRight: '1px solid rgba(230,237,243,.1)' }}>
@@ -159,6 +172,32 @@ const Placeholder = ({ label }: { label: string }) => (
     — {label} placeholder —
   </div>
 );
+function ProjectPreviewSection() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ padding: '10px 22px', borderBottom: '1px solid rgba(230,237,243,.1)' }}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        style={{ background: 'none', border: '1px solid rgba(91,214,192,.4)', borderRadius: 6, color: '#5BD6C0', padding: '4px 12px', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, cursor: 'pointer' }}
+      >
+        {open ? '✕ Close' : '⬡ Project preview'}
+      </button>
+      {open && (
+        <div style={{ marginTop: 12 }}>
+          <ProjectPreview
+            files={MOCK_PROJECT_FILES}
+            diffs={MOCK_PROJECT_DIFFS}
+            targetType='cli'
+            promotionHistory={MOCK_PROMO_HISTORY}
+            onRollback={id => console.log('[rollback]', id)}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function HealthDashboardSection() {
   const [open, setOpen] = useState(false);
   return (
