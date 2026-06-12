@@ -205,3 +205,13 @@ describe('budget-guard', () => {
     expect(guard.check().ok).toBe(false);
   });
 });
+
+describe('gate', () => {
+  it('gate_defaults_off', async () => {
+    const p = createRealProvider({ enabled: false, getAccessToken: async () => 'tok' });
+    expect(p.kind).toBe('llm_remote');
+    const r = await callProvider(p, req);
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(' ')).toMatch(/disabled/);
+  });
+});

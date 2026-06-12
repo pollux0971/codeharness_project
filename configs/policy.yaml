@@ -37,3 +37,4 @@ ask_commands:
 real_api_calls:
   enabled: false
   kill_switch: false
+  ci_override: true   # when CI env var is set, gateway ignores enabled:true
