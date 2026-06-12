@@ -5,10 +5,12 @@ import path from 'node:path';
 import {
   isPathInsideRoot, resolveInsideWorkspace, WorkspaceRegistry, detectSymlinkEscape,
   makeOracle, createDisposableWorkspace, applyPatch, collectDiff, cleanupWorkspace, seedFile, commitAll,
-  bootstrapGreenfieldWorkspace, WorkspaceIsolationPool, isPromotable,
+  bootstrapGreenfieldWorkspace, WorkspaceIsolationPool, isPromotable, rollbackPromotion,
   type GreenfieldWorkspaceInput,
 } from './index';
 import type { ProjectRunState } from '@codeharness/harness-core';
+import type { PromotionRecord } from '@codeharness/tool-executor';
+import { readJsonl } from '@codeharness/event-log';
 
 let ws: string; let outside: string;
 beforeEach(() => {
@@ -305,5 +307,64 @@ describe('workspace-manager', () => {
     expect(collectDiff(m)).toContain('+new');
     const root = m.root; cleanupWorkspace(r, m);
     expect(fsm.existsSync(root)).toBe(false);
+  });
+
+  // ---- STORY-012.3: Promotion rollback ----
+  describe('promotion-rollback', () => {
+    let target: string;
+    let wsRoot: string;
+    let traceLog: string;
+
+    beforeEach(() => {
+      target   = fs.mkdtempSync(path.join(os.tmpdir(), 'promo-target-'));
+      wsRoot   = fs.mkdtempSync(path.join(os.tmpdir(), 'promo-ws-'));
+      traceLog = path.join(os.tmpdir(), `rollback-trace-${Date.now()}.jsonl`);
+      fs.writeFileSync(path.join(target, 'output.ts'), 'export const x = 1;');
+      fs.writeFileSync(path.join(wsRoot,  'src.ts'),   'export const y = 2;');
+    });
+    afterEach(() => {
+      try { fs.rmSync(target,  { recursive: true, force: true }); } catch {}
+      try { fs.rmSync(wsRoot,  { recursive: true, force: true }); } catch {}
+      try { fs.unlinkSync(traceLog); } catch {}
+    });
+
+    function makePromoRecord(): PromotionRecord {
+      return {
+        promotion_id: 'promo-1', run_id: 'run-1', project_id: 'proj-1',
+        source_workspace_root: wsRoot, target_path: target,
+        promoted_at: new Date().toISOString(),
+        story_ids_promoted: ['STORY-A'],
+        validation_evidence: [{ story_id: 'STORY-A', checkpoint_sha: 'abc123' }],
+        trace_event_id: 'evt-promo-1',
+      };
+    }
+
+    it('promotion_reversible_by_single_command', async () => {
+      const record = await rollbackPromotion({ promotion: makePromoRecord(), traceLogPath: traceLog });
+      expect(fs.existsSync(target)).toBe(false);
+      expect(record.promotion_id).toBe('promo-1');
+      expect(record.target_path_removed).toBe(target);
+    });
+
+    it('rollback_recorded_in_trace', async () => {
+      const record = await rollbackPromotion({ promotion: makePromoRecord(), traceLogPath: traceLog });
+      const events = readJsonl(traceLog);
+      expect(events.length).toBe(1);
+      expect(events[0].type).toBe('promotion_rollback');
+      expect(events[0].event_id).toBe(record.trace_event_id);
+    });
+
+    it('workspace_state_unaffected_by_rollback', async () => {
+      await rollbackPromotion({ promotion: makePromoRecord(), traceLogPath: traceLog });
+      expect(fs.existsSync(wsRoot)).toBe(true);
+      expect(fs.existsSync(path.join(wsRoot, 'src.ts'))).toBe(true);
+    });
+
+    it('rollback_throws_when_target_missing', async () => {
+      const missing = makePromoRecord();
+      missing.target_path = path.join(os.tmpdir(), 'nonexistent-promo-dir');
+      await expect(rollbackPromotion({ promotion: missing, traceLogPath: traceLog }))
+        .rejects.toThrow(/rollback target not found/);
+    });
   });
 });

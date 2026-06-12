@@ -7,7 +7,9 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
+import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import { createTraceEvent, appendJsonl, readJsonl } from '@codeharness/event-log';
 
 export interface WorkspaceManifest {
   workspace_id: string; root: string; disposable: boolean;
@@ -253,6 +255,76 @@ export function isPromotable(
   return runState.stories.every(
     s => s.status === 'done' && s.checkpoint_sha !== null,
   );
+}
+
+// ---- STORY-012.3: Promotion rollback ----
+
+/** Structural subset of PromotionRecord — avoids a circular dep with tool-executor. */
+export interface RollbackOptions {
+  promotion: {
+    promotion_id: string;
+    run_id: string;
+    project_id: string;
+    source_workspace_root: string;
+    target_path: string;
+  };
+  traceLogPath: string;
+}
+
+export interface RollbackRecord {
+  rollback_id: string;
+  promotion_id: string;
+  run_id: string;
+  project_id: string;
+  target_path_removed: string;
+  rolled_back_at: string;
+  trace_event_id: string;
+}
+
+/**
+ * Reverse a promotion by removing target_path and recording a trace event.
+ * The sandbox (source_workspace_root) is never touched — only the exported artifact is removed.
+ */
+export async function rollbackPromotion(opts: RollbackOptions): Promise<RollbackRecord> {
+  const { promotion, traceLogPath } = opts;
+
+  if (!fs.existsSync(promotion.target_path)) {
+    throw new Error(`rollback target not found: ${promotion.target_path}`);
+  }
+
+  // Verify sandbox is still intact (directory check only — no reads/writes inside).
+  const wsStats = fs.statSync(promotion.source_workspace_root, { throwIfNoEntry: false });
+  if (!wsStats || !wsStats.isDirectory()) {
+    throw new Error(`source workspace root not accessible: ${promotion.source_workspace_root}`);
+  }
+
+  fs.rmSync(promotion.target_path, { recursive: true, force: true });
+
+  const existing = readJsonl(traceLogPath);
+  const last = existing[existing.length - 1];
+  const traceEvent = createTraceEvent({
+    run_id: promotion.run_id,
+    seq: last ? last.seq + 1 : 0,
+    previous_event_hash: last ? (last.hash ?? null) : null,
+    type: 'promotion_rollback',
+    payload: {
+      promotion_id: promotion.promotion_id,
+      run_id: promotion.run_id,
+      project_id: promotion.project_id,
+      target_path_removed: promotion.target_path,
+    },
+  });
+  appendJsonl(traceLogPath, traceEvent);
+
+  return {
+    rollback_id: crypto.randomUUID(),
+    promotion_id: promotion.promotion_id,
+    run_id: promotion.run_id,
+    project_id: promotion.project_id,
+    target_path_removed: promotion.target_path,
+    rolled_back_at: new Date().toISOString(),
+    trace_event_id: traceEvent.event_id,
+  };
 }
 
 // ---- STORY-010.4: Parallel story execution in isolated workspaces ----
