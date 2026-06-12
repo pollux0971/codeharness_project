@@ -486,3 +486,95 @@ export type {
   OrchestratorV0Action,
   RuntimeStoryStatus,
 } from './orchestrator-v0.ts';
+
+// ── STORY-019.3: Push-notifications for escalations and approvals ─────────────
+
+export interface NotificationChannel {
+  type: 'webhook' | 'email';
+  url?: string;
+  address?: string;
+  enabled: boolean;
+  retry?: { max_attempts: number; backoff_ms: number };
+}
+
+export interface NotificationConfig {
+  version: number;
+  channels: { primary: NotificationChannel; email?: NotificationChannel };
+  events: string[];
+}
+
+export interface NotificationPayload {
+  event_type: string;
+  story_id?: string;
+  run_id?: string;
+  message: string;
+  trace_event_id?: string;
+}
+
+export type NotificationHttpClient = (
+  url: string,
+  payload: NotificationPayload
+) => Promise<{ ok: boolean; status: number }>;
+
+export interface NotificationResult {
+  ok: boolean;
+  channel: string;
+  error?: string;
+}
+
+const defaultHttpClient: NotificationHttpClient = async (url, payload) => {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return { ok: res.ok, status: res.status };
+};
+
+const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
+
+export async function sendNotification(
+  payload: NotificationPayload,
+  config: NotificationConfig,
+  httpClient?: NotificationHttpClient
+): Promise<NotificationResult> {
+  if (!config.events.includes(payload.event_type)) {
+    return { ok: false, channel: 'none', error: 'event type not in configured events' };
+  }
+
+  const primary = config.channels.primary;
+
+  if (!primary.enabled) {
+    return { ok: false, channel: 'none', error: 'no enabled channel' };
+  }
+
+  if (primary.type === 'email') {
+    return { ok: false, channel: 'email', error: 'email not implemented' };
+  }
+
+  if (primary.type === 'webhook') {
+    if (!primary.url) {
+      return { ok: false, channel: 'webhook', error: 'webhook url not configured' };
+    }
+    const http = httpClient ?? defaultHttpClient;
+    const maxAttempts = primary.retry?.max_attempts ?? 1;
+    const backoffMs = primary.retry?.backoff_ms ?? 0;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const result = await http(primary.url, payload);
+        if (result.ok) return { ok: true, channel: 'webhook' };
+        if (attempt < maxAttempts) await sleep(backoffMs);
+      } catch (e: unknown) {
+        if (attempt < maxAttempts) {
+          await sleep(backoffMs);
+          continue;
+        }
+        return { ok: false, channel: 'webhook', error: e instanceof Error ? e.message : String(e) };
+      }
+    }
+    return { ok: false, channel: 'webhook', error: 'all retry attempts failed' };
+  }
+
+  return { ok: false, channel: 'none', error: 'unknown channel type' };
+}

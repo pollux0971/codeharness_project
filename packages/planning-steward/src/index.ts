@@ -12,8 +12,45 @@ export interface IdeaInput {
   source_refs?: string[];
 }
 
+// ── STORY-019.4: Prompt-injection detection ───────────────────────────────────
+
+export interface InjectionDetectionResult {
+  detected: boolean;
+  signals: string[];
+}
+
+const INJECTION_PATTERNS: Array<{ label: string; re: RegExp }> = [
+  { label: 'role_prefix_SYSTEM',      re: /SYSTEM:/i },
+  { label: 'role_prefix_USER',        re: /USER:/i },
+  { label: 'role_prefix_ASSISTANT',   re: /ASSISTANT:/i },
+  { label: 'special_token_im_start',  re: /<\|im_start\|>/i },
+  { label: 'special_token_im_end',    re: /<\|im_end\|>/i },
+  { label: 'special_token_endoftext', re: /<\|endoftext\|>/i },
+  { label: 'ignore_previous',         re: /ignore\s+previous\s+instructions/i },
+  { label: 'ignore_all_previous',     re: /ignore\s+all\s+previous/i },
+  { label: 'disregard_above',         re: /disregard\s+above/i },
+  { label: 'roleplay_pretend',        re: /pretend\s+you\s+are/i },
+  { label: 'roleplay_act_as',         re: /act\s+as\s+if\s+you\s+are/i },
+  { label: 'roleplay_you_are_now',    re: /you\s+are\s+now/i },
+  { label: 'write_set_widening',      re: /write\s+to\s+\//i },
+  { label: 'bypass_workspace',        re: /bypass_workspace/i },
+  { label: 'policy_write_set',        re: /allowed_write_set:/i },
+];
+
+export function detectPromptInjection(text: string): InjectionDetectionResult {
+  const signals: string[] = [];
+  for (const { label, re } of INJECTION_PATTERNS) {
+    if (re.test(text)) signals.push(label);
+  }
+  return { detected: signals.length > 0, signals };
+}
+
 export function classifyIdea(input: IdeaInput): IdeaMode {
-  const text = `${input.title} ${input.description}`.toLowerCase();
+  const combined = `${input.title} ${input.description}`;
+  if (detectPromptInjection(combined).detected) {
+    throw new Error('idea_rejected: prompt injection detected');
+  }
+  const text = combined.toLowerCase();
   if (input.source === 'oss_reference' || text.includes('github.com')) return 'research_spike';
   if (text.includes('checkpoint') || text.includes('freeze')) return 'checkpoint';
   if (input.source === 'bug_report' || text.includes('bug') || text.includes('fix')) return 'patch';
@@ -452,4 +489,60 @@ export function buildStoryGraph(bundle: PlanningBundle): StoryNode[] {
     allowed_write_set: s.allowed_write_set,
     parallelism_class: s.parallelism_class,
   }));
+}
+
+// ── STORY-019.1: DefectReport schema, validation, and sanitization ────────────
+
+export interface DefectReport {
+  report_id: string;
+  title: string;
+  what_broke: string;
+  expected_behaviour: string;
+  actual_behaviour: string;
+  artifact_version: string;
+  reported_at: string;
+  story_id?: string | null;
+  reproduction_steps?: string | null;
+  severity?: 'critical' | 'high' | 'medium' | 'low' | null;
+}
+
+const REQUIRED_DEFECT_FIELDS = [
+  'report_id', 'title', 'what_broke', 'expected_behaviour',
+  'actual_behaviour', 'artifact_version', 'reported_at',
+] as const;
+
+const DEFECT_FIELD_LIMITS: Record<string, number> = {
+  title: 120,
+  what_broke: 2000,
+  expected_behaviour: 2000,
+  actual_behaviour: 2000,
+  reproduction_steps: 5000,
+};
+
+export function validateDefectReport(report: unknown): ValidationResult {
+  if (typeof report !== 'object' || report === null) {
+    return { ok: false, errors: ['defect report must be a non-null object'] };
+  }
+  const r = report as Record<string, unknown>;
+  const errors: string[] = [];
+
+  for (const field of REQUIRED_DEFECT_FIELDS) {
+    if (typeof r[field] !== 'string' || !(r[field] as string).trim()) {
+      errors.push(`missing or empty required field: ${field}`);
+    }
+  }
+
+  for (const [field, limit] of Object.entries(DEFECT_FIELD_LIMITS)) {
+    if (typeof r[field] === 'string' && (r[field] as string).length > limit) {
+      errors.push(`field ${field} exceeds ${limit} character limit`);
+    }
+  }
+
+  return { ok: errors.length === 0, errors };
+}
+
+export function sanitizeDefectText(text: string): string {
+  return text
+    .replace(/SYSTEM:|USER:|ASSISTANT:|<\|im_start\|>/gi, '')
+    .replace(/[<>&]/g, '');
 }

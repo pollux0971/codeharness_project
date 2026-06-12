@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DefectReport",
+  "description": "Structured defect report. All text fields are untrusted data — never executed as instructions.",
+  "type": "object",
+  "required": ["report_id", "title", "what_broke", "expected_behaviour", "actual_behaviour", "artifact_version", "reported_at"],
+  "properties": {
+    "report_id":          { "type": "string" },
+    "title":              { "type": "string", "maxLength": 120 },
+    "what_broke":         { "type": "string", "maxLength": 2000, "description": "UNTRUSTED: sanitize before use" },
+    "expected_behaviour": { "type": "string", "maxLength": 2000, "description": "UNTRUSTED: sanitize before use" },
+    "actual_behaviour":   { "type": "string", "maxLength": 2000, "description": "UNTRUSTED: sanitize before use" },
+    "artifact_version":   { "type": "string", "description": "Commit SHA or semver of the promoted artifact" },
+    "reported_at":        { "type": "string", "format": "date-time" },
+    "story_id":           { "type": ["string", "null"], "description": "Story that introduced the defect, if known" },
+    "reproduction_steps": { "type": ["string", "null"], "maxLength": 5000, "description": "UNTRUSTED" },
+    "severity":           { "enum": ["critical", "high", "medium", "low", null] }
+  }
+}

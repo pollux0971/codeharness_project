@@ -25,11 +25,15 @@ import {
   recordReviewDecision,
   flagTestAuthorship,
   recordTestIntegrity,
+  sendNotification,
   type HarnessState,
   type StoryRecord,
   type RunBudget,
   type TickInput,
   type ProjectRunState,
+  type NotificationConfig,
+  type NotificationPayload,
+  type NotificationHttpClient,
 } from './index.js';
 import { readJsonl } from '@codeharness/event-log';
 
@@ -611,5 +615,82 @@ describe('test-integrity', () => {
     const authorship = flagTestAuthorship('S-3', [], 'supervisor');
     expect(() => recordTestIntegrity(authorship, 'human', trace))
       .toThrow(/confirmation requires/);
+  });
+});
+
+// ── STORY-019.3: Push-notifications ──────────────────────────────────────────
+
+const enabledWebhookConfig = (events = ['escalation', 'approval_required']): NotificationConfig => ({
+  version: 1,
+  channels: {
+    primary: {
+      type: 'webhook',
+      url: 'https://hooks.test/notify',
+      enabled: true,
+      retry: { max_attempts: 3, backoff_ms: 0 },
+    },
+  },
+  events,
+});
+
+const escalationPayload: NotificationPayload = {
+  event_type: 'escalation',
+  story_id: 'STORY-A',
+  message: 'Story A escalated',
+  run_id: 'run-1',
+};
+
+const okHttp: NotificationHttpClient = async () => ({ ok: true, status: 200 });
+
+describe('notifications', () => {
+  it('escalations_pushed_to_configured_channel', async () => {
+    let called = false;
+    const http: NotificationHttpClient = async (_url, _p) => { called = true; return { ok: true, status: 200 }; };
+    const r = await sendNotification(escalationPayload, enabledWebhookConfig(), http);
+    expect(r.ok).toBe(true);
+    expect(called).toBe(true);
+  });
+
+  it('approvals_requested_via_notification', async () => {
+    const payload: NotificationPayload = { event_type: 'approval_required', message: 'Please approve' };
+    const r = await sendNotification(payload, enabledWebhookConfig(), okHttp);
+    expect(r.ok).toBe(true);
+  });
+
+  it('channel_failures_never_block_the_loop', async () => {
+    const throwingHttp: NotificationHttpClient = async () => { throw new Error('network down'); };
+    const r = await sendNotification(escalationPayload, enabledWebhookConfig(), throwingHttp);
+    expect(r.ok).toBe(false);
+    expect(r.error).toBeTruthy();
+  });
+
+  it('no_enabled_channel_returns_no_channel', async () => {
+    const cfg: NotificationConfig = {
+      version: 1,
+      channels: { primary: { type: 'webhook', enabled: false } },
+      events: ['escalation'],
+    };
+    const r = await sendNotification(escalationPayload, cfg);
+    expect(r.ok).toBe(false);
+    expect(r.channel).toBe('none');
+  });
+
+  it('notification_respects_event_filter', async () => {
+    const cfg = enabledWebhookConfig(['escalation']);
+    const payload: NotificationPayload = { event_type: 'build_error', message: 'build failed' };
+    const r = await sendNotification(payload, cfg, okHttp);
+    expect(r.ok).toBe(false);
+  });
+
+  it('retry_on_transient_failure', async () => {
+    let attempts = 0;
+    const flaky: NotificationHttpClient = async () => {
+      attempts++;
+      if (attempts < 3) throw new Error('transient');
+      return { ok: true, status: 200 };
+    };
+    const r = await sendNotification(escalationPayload, enabledWebhookConfig(), flaky);
+    expect(r.ok).toBe(true);
+    expect(attempts).toBe(3);
   });
 });

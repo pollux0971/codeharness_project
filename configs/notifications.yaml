@@ -1,0 +1,22 @@
+version: 1
+
+channels:
+  primary:
+    type: webhook
+    url: https://hooks.example.com/YOUR_WEBHOOK_URL   # replace with real URL when enabling
+    enabled: false    # default off; flip to true to activate
+    retry:
+      max_attempts: 3
+      backoff_ms: 500
+
+  email:
+    type: email
+    address: operator@example.com
+    enabled: false    # stub only; SMTP not implemented
+
+events:
+  - escalation
+  - approval_required
+  - promotion_completed
+  - run_completed
+  - failure_gene_systemic  # consolidated_count >= 2
