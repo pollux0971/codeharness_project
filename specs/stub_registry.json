@@ -42,26 +42,6 @@
       "owner": "STORY-002.1"
     },
     {
-      "symbol": "runSkillTests",
-      "file": "skill-tester/src/index.ts",
-      "owner": "ROADMAP:phase-2"
-    },
-    {
-      "symbol": "robustnessCheck",
-      "file": "skill-tester/src/index.ts",
-      "owner": "ROADMAP:phase-2"
-    },
-    {
-      "symbol": "leakageAudit",
-      "file": "skill-tester/src/index.ts",
-      "owner": "ROADMAP:phase-2"
-    },
-    {
-      "symbol": "registerSkill",
-      "file": "skill-tester/src/index.ts",
-      "owner": "ROADMAP:phase-2"
-    },
-    {
       "symbol": "composeDeveloperTaskPacket",
       "file": "supervisor-runtime/src/index.ts",
       "owner": "STORY-002.3"

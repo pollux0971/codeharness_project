@@ -1,7 +1,10 @@
-// Skill testing & iteration runtime (skeleton).
+// Skill testing & iteration runtime.
 // Deterministic gate: a skill is registered ONLY if its tests pass in a
 // disposable workspace, it survives a robustness check, and it passes the
 // leakage audit. The harness (not the agent) decides registration.
+
+import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { join, extname } from 'node:path';
 
 export type SkillStatus = 'draft' | 'tested' | 'registered' | 'deprecated' | 'quarantined';
 
@@ -18,22 +21,52 @@ export const DEFAULT_LIFECYCLE: LifecycleConfig = {
   registerPassRate: 1.0, robustnessRuns: 5, quarantineBelow: 0.8, iterationBudget: 3,
 };
 
-// Run a skill's unit tests inside a disposable workspace (delegated to the
-// workspace-manager + tool-executor in the real implementation).
-export async function runSkillTests(_skillPath: string): Promise<TestResult> {
-  throw new Error('not implemented: run tests/ in a disposable workspace via the harness');
+export interface SkillExecutor {
+  runTests(skillPath: string): Promise<TestResult>;
 }
 
-// Re-run tests over N fresh workspaces. A skill that passed once but is brittle
-// (e.g. carries source-trajectory-specific assumptions) shows a low pass-rate here.
-export async function robustnessCheck(_skillPath: string, _runs: number): Promise<RobustnessResult> {
-  throw new Error('not implemented: N fresh-run robustness check');
+export const DEFAULT_EXECUTOR: SkillExecutor = {
+  async runTests(skillPath: string): Promise<TestResult> {
+    const { execFileSync } = await import('node:child_process');
+    const testsDir = join(skillPath, 'tests');
+    try {
+      const out = execFileSync('pytest', ['-q', testsDir], { encoding: 'utf8' });
+      const m = out.match(/(\d+) passed/);
+      const passed = m ? parseInt(m[1]) : 0;
+      const t = out.match(/(\d+) (passed|failed)/g) ?? [];
+      const total = t.reduce((acc, s) => acc + parseInt(s), 0) || passed;
+      return { passed, total };
+    } catch (e) {
+      const msg = (e as { stdout?: string }).stdout ?? String(e);
+      const m = msg.match(/(\d+) passed/);
+      const passed = m ? parseInt(m[1]) : 0;
+      return { passed, total: Math.max(passed, 1) };
+    }
+  }
+};
+
+export async function runSkillTests(
+  skillPath: string,
+  executor: SkillExecutor = DEFAULT_EXECUTOR
+): Promise<TestResult> {
+  const skillJson = JSON.parse(readFileSync(join(skillPath, 'skill.json'), 'utf8'));
+  if (!skillJson.tests || skillJson.tests.length === 0) {
+    return { passed: 0, total: 0 };
+  }
+  return executor.runTests(skillPath);
 }
 
-// Static audit: reject skills that hardcode expected outputs, branch on task
-// ids, or read ground-truth files.
-export async function leakageAudit(_skillPath: string): Promise<'pass' | 'fail'> {
-  throw new Error('not implemented: leakage / OOD audit');
+export async function robustnessCheck(
+  skillPath: string,
+  runs: number,
+  executor: SkillExecutor = DEFAULT_EXECUTOR
+): Promise<RobustnessResult> {
+  let passingRuns = 0;
+  for (let i = 0; i < runs; i++) {
+    const result = await executor.runTests(skillPath);
+    if (result.passed === result.total) passingRuns++;
+  }
+  return { freshRuns: runs, passRate: passingRuns / runs };
 }
 
 // Pure decision used by the harness gate after evaluation.
@@ -45,9 +78,75 @@ export function decideStatus(t: TestResult, r: RobustnessResult, audit: 'pass' |
   return 'registered';
 }
 
-// ── registration gate orchestration (ties runSkillTests + robustnessCheck + leakageAudit + decideStatus) ─
-/** Full registration gate: tests pass → robustness pass → leakage clean → registered,
- *  else iterate one change at a time, then quarantine (see SKILL_RUNTIME_MODEL.md). */
-export async function registerSkill(_skillPath: string, _cfg?: LifecycleConfig): Promise<SkillStatus> {
-  throw new Error('not implemented: registration gate orchestration');
+function collectSourceFiles(dir: string): string[] {
+  if (!existsSync(dir)) return [];
+  const files: string[] = [];
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    const st = statSync(full);
+    if (st.isDirectory()) {
+      files.push(...collectSourceFiles(full));
+    } else {
+      const ext = extname(entry);
+      if (ext === '.py' || ext === '.ts') files.push(full);
+    }
+  }
+  return files;
+}
+
+const LEAK_STRINGS = [
+  'os.environ[',
+  'process.env[',
+  '/fixtures/',
+  '/ground.truth/',
+  '/expected_output/',
+];
+const LEAK_STORY_ID = /STORY-\d+\.\d+/;
+
+export async function leakageAudit(skillPath: string): Promise<'pass' | 'fail'> {
+  const files = collectSourceFiles(join(skillPath, 'scripts'));
+  for (const file of files) {
+    const content = readFileSync(file, 'utf8');
+    for (const pattern of LEAK_STRINGS) {
+      if (content.includes(pattern)) return 'fail';
+    }
+    if (LEAK_STORY_ID.test(content)) return 'fail';
+  }
+  return 'pass';
+}
+
+export async function registerSkill(
+  skillPath: string,
+  cfg: LifecycleConfig = DEFAULT_LIFECYCLE,
+  executor: SkillExecutor = DEFAULT_EXECUTOR
+): Promise<SkillStatus> {
+  const tests = await runSkillTests(skillPath, executor);
+  const robust = await robustnessCheck(skillPath, cfg.robustnessRuns, executor);
+  const audit = await leakageAudit(skillPath);
+  let status = decideStatus(tests, robust, audit, cfg);
+
+  // Escalate draft→quarantine when tests fail AND robustness is also critically low.
+  // decideStatus short-circuits on test failures before checking robustness; this
+  // registration gate applies both conditions together.
+  if (status === 'draft' && tests.total > 0 && robust.passRate < cfg.quarantineBelow) {
+    status = 'quarantined';
+  }
+
+  if (status === 'quarantined') {
+    let reason: string;
+    if (audit === 'fail') {
+      reason = 'leakage detected';
+    } else if (tests.total === 0) {
+      reason = 'no tests';
+    } else if (tests.passed < tests.total) {
+      reason = 'test failures';
+    } else {
+      reason = 'low robustness';
+    }
+    const memPath = join(skillPath, '.memory.md');
+    const existing = existsSync(memPath) ? readFileSync(memPath, 'utf8') : '';
+    writeFileSync(memPath, existing + `\nAVOID: quarantined — ${reason}`);
+  }
+
+  return status;
 }
