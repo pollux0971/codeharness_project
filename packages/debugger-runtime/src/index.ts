@@ -60,6 +60,68 @@ export function emitFailureGene(args: {
   };
 }
 
+// ── STORY-017.4: Competitive Debug Race ──────────────────────────────────────
+
+/** Locally-typed story record extended with competitive debug fields. Structurally
+ *  compatible with StoryRecord from @codeharness/harness-core without the import. */
+export interface CompetitiveStoryRecord {
+  story_id: string;
+  epic_id: string;
+  depends_on: string[];
+  parallelism_class: 'parallel_safe' | 'parallel_with_barrier' | 'sequential' | 'exclusive';
+  status: string;
+  attempts: number;
+  attempt_budget: number;
+  branch: string | null;
+  last_action: string | null;
+  last_result: string | null;
+  last_validation: string | null;
+  blocked_reason: string | null;
+  competitive_debug?: boolean;
+  debug_k?: number;
+}
+
+export interface RepairAttempt {
+  candidate_id: number;
+  passed: boolean;
+  failure_gene?: FailureGene;
+}
+
+export interface CompetitiveDebugResult {
+  winner_candidate: number | null;
+  winner_passed: boolean;
+  loser_genes: FailureGene[];
+  candidates_run: number;
+}
+
+export interface CompetitiveDebugOptions {
+  story: CompetitiveStoryRecord;
+  /** Called once per candidate (0-indexed). Returns pass/fail + optional gene for losers. */
+  debugRepair: (candidate: number) => Promise<RepairAttempt>;
+  /** How many candidates to race. Default: story.debug_k ?? 2. */
+  k?: number;
+}
+
+/** Launch k debug candidates concurrently; select the first passing one as winner.
+ *  All candidates run to completion (Promise.all). Loser failure genes are recorded. */
+export async function runCompetitiveDebug(opts: CompetitiveDebugOptions): Promise<CompetitiveDebugResult> {
+  const k = opts.k ?? opts.story.debug_k ?? 2;
+  const attempts = await Promise.all(
+    Array.from({ length: k }, (_, i) => opts.debugRepair(i)),
+  );
+  const winner = attempts.find(a => a.passed === true);
+  const losers = attempts.filter(a => a.passed === false);
+  const loser_genes = losers
+    .filter(a => a.failure_gene != null)
+    .map(a => a.failure_gene!);
+  return {
+    winner_candidate: winner?.candidate_id ?? null,
+    winner_passed: winner != null,
+    loser_genes,
+    candidates_run: k,
+  };
+}
+
 // ── STORY-008.4: Debug Loop Wiring ──────────────────────────────────────────
 // Wire VALIDATION(fail) → DEBUG_LOOP → VALIDATION.
 // All I/O is injected for determinism and testability; no real LLM, no external API.

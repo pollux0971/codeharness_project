@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
   classifyFailure, buildFailureSignature, decideRepairRoute, emitFailureGene,
-  runDebugLoop,
+  runDebugLoop, runCompetitiveDebug,
   type DebugLoopInput, type DebugContext, type BankGene, type FailureBankOps,
+  type CompetitiveDebugOptions, type RepairAttempt,
 } from './index';
 
 describe('debugger-runtime', () => {
@@ -23,6 +24,76 @@ describe('debugger-runtime', () => {
   it('emit_failure_gene_rejects_long_avoid', () => {
     const long = Array(50).fill('x').join(' ');
     expect(() => emitFailureGene({ matching_signal: 's', summary: 's', strategy: 's', avoid: long, failure_type: 'test' })).toThrow(/40 words/);
+  });
+});
+
+// ── STORY-017.4: Competitive Debug Race tests ─────────────────────────────────
+
+const fakeGene = (sig: string) => emitFailureGene({
+  matching_signal: sig, summary: 'fail', strategy: 'retry',
+  avoid: 'do not repeat this failure', failure_type: 'test',
+});
+
+function makeCompetitiveStory(overrides: Partial<{
+  story_id: string; competitive_debug: boolean; debug_k: number;
+}> = {}) {
+  return {
+    story_id: overrides.story_id ?? 'S-1',
+    competitive_debug: overrides.competitive_debug ?? true,
+    debug_k: overrides.debug_k ?? 2,
+    epic_id: 'E-1', depends_on: [],
+    parallelism_class: 'sequential' as const,
+    status: 'in_progress', attempts: 1, attempt_budget: 3,
+    branch: null, last_action: null, last_result: null,
+    last_validation: null, blocked_reason: null,
+  };
+}
+
+describe('competitive-debug', () => {
+  it('k_debuggers_race_on_flagged_story', async () => {
+    const story = makeCompetitiveStory({ story_id: 'S-1', debug_k: 3 });
+    const result = await runCompetitiveDebug({
+      story,
+      debugRepair: async (i) => ({ candidate_id: i, passed: true }),
+    });
+    expect(result.candidates_run).toBe(3);
+    expect(result.winner_passed).toBe(true);
+  });
+
+  it('first_validator_pass_wins', async () => {
+    const story = makeCompetitiveStory({ story_id: 'S-2', debug_k: 3 });
+    const result = await runCompetitiveDebug({
+      story,
+      debugRepair: async (i): Promise<RepairAttempt> => ({
+        candidate_id: i,
+        passed: i > 0,
+        failure_gene: i === 0 ? fakeGene(`sig-${i}`) : undefined,
+      }),
+    });
+    expect(result.winner_candidate).toBe(1);
+    expect(result.loser_genes.length).toBeGreaterThan(0);
+  });
+
+  it('losing_candidates_discarded_with_genes_recorded', async () => {
+    const story = makeCompetitiveStory({ story_id: 'S-3', debug_k: 2 });
+    const result = await runCompetitiveDebug({
+      story,
+      debugRepair: async (i): Promise<RepairAttempt> => ({
+        candidate_id: i, passed: false, failure_gene: fakeGene(`sig-${i}`),
+      }),
+    });
+    expect(result.winner_passed).toBe(false);
+    expect(result.loser_genes).toHaveLength(2);
+  });
+
+  it('all_candidates_fail_returns_null_winner', async () => {
+    const story = makeCompetitiveStory({ story_id: 'S-4', debug_k: 2 });
+    const result = await runCompetitiveDebug({
+      story,
+      debugRepair: async (i) => ({ candidate_id: i, passed: false }),
+    });
+    expect(result.winner_candidate).toBeNull();
+    expect(result.winner_passed).toBe(false);
   });
 });
 

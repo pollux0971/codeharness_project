@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { TaskGraph, legalTransition, validateFilesWithinScope, runSequentialScheduler, runParallelScheduler, computeSpawnPlan, recordSpawnPlan } from './index';
+import { TaskGraph, legalTransition, validateFilesWithinScope, runSequentialScheduler, runParallelScheduler, computeSpawnPlan, recordSpawnPlan, isCompetitiveDebugEnabled } from './index';
 import type { IsolationPool, SpawnCandidate } from './index';
 import type { StoryRecord } from '@codeharness/harness-core';
 import { readJsonl } from '@codeharness/event-log';
@@ -207,6 +207,16 @@ describe('spawn-plan', () => {
     const plan = computeSpawnPlan([]);
     expect(plan.parallel_batch).toHaveLength(0);
     expect(plan.sequential_queue).toHaveLength(0);
+  });
+});
+
+describe('competitive-debug-flag', () => {
+  it('flag_default_off', () => {
+    expect(isCompetitiveDebugEnabled({})).toBe(false);
+  });
+
+  it('flag_off_when_explicitly_false', () => {
+    expect(isCompetitiveDebugEnabled({ competitive_debug: false })).toBe(false);
   });
 });
 

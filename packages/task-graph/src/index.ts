@@ -109,6 +109,13 @@ export const TaskUpdate = (g: TaskGraph, id: string, p: TaskUpdateInput) => g.up
 export const TaskList = (g: TaskGraph, f?: { status?: TaskStatus }) => g.list(f);
 export const TaskGet = (g: TaskGraph, id: string) => g.get(id);
 
+// ── STORY-017.4: Competitive debug flag predicate ────────────────────────────
+
+/** Returns true iff competitive debug mode is explicitly enabled for this story. */
+export function isCompetitiveDebugEnabled(story: { competitive_debug?: boolean }): boolean {
+  return story.competitive_debug === true;
+}
+
 export type { SchedulerResult, SchedulerRunOptions, ParallelSchedulerOptions, IsolationPool } from './scheduler.js';
 export { runSequentialScheduler, runParallelScheduler } from './scheduler.js';
 export type { SpawnCandidate, SpawnPlan } from './spawn-plan.js';

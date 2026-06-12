@@ -42,3 +42,8 @@ real_api_calls:
 quality_bar:
   required_checks: [build, test, typecheck]
   coverage_threshold: null   # set to a number (e.g. 80) to enable coverage gate
+
+competitive_debug:
+  enabled: false      # must be set per-story; system default off
+  max_k: 4            # hard cap on k per story; costs multiply
+  # To enable for a story: set story.competitive_debug=true and story.debug_k=2 in tracker
