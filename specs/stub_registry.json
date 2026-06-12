@@ -12,31 +12,6 @@
       "owner": "ROADMAP:phase-2"
     },
     {
-      "symbol": "startCallbackServerAndOpenBrowser",
-      "file": "codex-auth/src/index.ts",
-      "owner": "ROADMAP:phase-2"
-    },
-    {
-      "symbol": "exchangeCode",
-      "file": "codex-auth/src/index.ts",
-      "owner": "ROADMAP:phase-2"
-    },
-    {
-      "symbol": "refresh",
-      "file": "codex-auth/src/index.ts",
-      "owner": "ROADMAP:phase-2"
-    },
-    {
-      "symbol": "loadAuth",
-      "file": "codex-auth/src/index.ts",
-      "owner": "ROADMAP:phase-2"
-    },
-    {
-      "symbol": "saveAuth",
-      "file": "codex-auth/src/index.ts",
-      "owner": "ROADMAP:phase-2"
-    },
-    {
       "symbol": "applySlidingWindow",
       "file": "context-manager/src/index.ts",
       "owner": "ROADMAP:phase-2"

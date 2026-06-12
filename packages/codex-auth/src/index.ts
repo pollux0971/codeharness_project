@@ -6,6 +6,12 @@
 // Personal developer use only. Shares ChatGPT rate limits. Not for resale.
 
 import { createHash, randomBytes } from 'node:crypto';
+import http from 'node:http';
+import { homedir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { spawn } from 'node:child_process';
 
 export const CODEX_OAUTH = {
   clientId: 'app_EMoamEEZ73f0CkXaXp7hrann',           // public Codex CLI client
@@ -26,6 +32,8 @@ export interface AuthTokens {
   expires_at: number;        // epoch seconds
   account_id?: string;
 }
+
+export type HttpClient = (url: string, init: RequestInit) => Promise<Response>;
 
 // --- PKCE (pure, implemented) ---
 function b64url(buf: Buffer): string {
@@ -51,26 +59,194 @@ export function buildAuthorizeUrl(challenge: string, state: string): string {
   return `${CODEX_OAUTH.authorizeUrl}?${p.toString()}`;
 }
 
-// --- Network / server boundary (stubbed) ---
-export async function startCallbackServerAndOpenBrowser(_authorizeUrl: string): Promise<string> {
-  // Start http://localhost:1455, open the browser, resolve with the ?code= on callback.
-  throw new Error('not implemented: local callback server on :1455 + browser open');
-}
-export async function exchangeCode(_code: string, _verifier: string): Promise<AuthTokens> {
-  // POST tokenUrl with grant_type=authorization_code, code, redirect_uri, client_id, code_verifier.
-  throw new Error('not implemented: token exchange at /oauth/token');
-}
-export async function refresh(_tokens: AuthTokens): Promise<AuthTokens> {
-  // POST tokenUrl with grant_type=refresh_token, refresh_token, client_id.
-  throw new Error('not implemented: refresh-token grant');
+// --- Default browser opener ---
+function defaultOpenBrowser(url: string): void {
+  const platform = process.platform;
+  const cmd = platform === 'darwin' ? 'open' : platform === 'win32' ? 'start' : 'xdg-open';
+  spawn(cmd, [url], { detached: true, stdio: 'ignore' }).unref();
 }
 
-// --- Token store (stubbed; delegate to Secret Broker in the real impl) ---
-export async function loadAuth(): Promise<AuthTokens | null> {
-  throw new Error('not implemented: read ~/.codex/auth.json via Secret Broker');
+// --- Network / server boundary ---
+
+export async function startCallbackServerAndOpenBrowser(
+  authorizeUrl: string,
+  openBrowser: (url: string, port: number) => void = (url) => defaultOpenBrowser(url),
+  port: number = CODEX_OAUTH.callbackPort,
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const server = http.createServer((req, res) => {
+      const addr = server.address();
+      const actualPort = addr && typeof addr === 'object' ? addr.port : port;
+      const parsed = new URL(req.url ?? '', `http://localhost:${actualPort}`);
+      if (parsed.pathname !== '/auth/callback') {
+        res.writeHead(404).end();
+        return;
+      }
+
+      const error = parsed.searchParams.get('error');
+      if (error) {
+        res.writeHead(400).end('Authentication error. You may close this tab.');
+        server.close();
+        clearTimeout(timer);
+        reject(new Error('auth callback error'));
+        return;
+      }
+
+      const code = parsed.searchParams.get('code');
+      if (!code) {
+        res.writeHead(400).end('Missing code parameter.');
+        server.close();
+        clearTimeout(timer);
+        reject(new Error('auth callback missing code'));
+        return;
+      }
+
+      res.writeHead(200, { 'Content-Type': 'text/html' }).end(
+        '<html><body><p>Authentication successful. You may close this tab.</p></body></html>',
+      );
+      server.close();
+      clearTimeout(timer);
+      resolve(code);
+    });
+
+    const timer = setTimeout(() => {
+      server.close();
+      reject(new Error('auth timeout: no callback received'));
+    }, 120_000);
+
+    server.listen(port, () => {
+      const addr = server.address();
+      const actualPort = addr && typeof addr === 'object' ? addr.port : port;
+      openBrowser(authorizeUrl, actualPort);
+    });
+
+    server.on('error', (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+  });
 }
-export async function saveAuth(_t: AuthTokens): Promise<void> {
-  throw new Error('not implemented: persist ~/.codex/auth.json via Secret Broker');
+
+export async function exchangeCode(
+  code: string,
+  verifier: string,
+  httpClient: HttpClient = fetch as HttpClient,
+): Promise<AuthTokens> {
+  const body = new URLSearchParams({
+    grant_type: 'authorization_code',
+    code,
+    redirect_uri: CODEX_OAUTH.redirectUri,
+    client_id: CODEX_OAUTH.clientId,
+    code_verifier: verifier,
+  });
+
+  const res = await httpClient(CODEX_OAUTH.tokenUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
+  });
+
+  if (!res.ok) {
+    // Never include response body — it may contain tokens
+    throw new Error(`token exchange failed (status ${res.status})`);
+  }
+
+  const data = await res.json() as {
+    access_token: string;
+    refresh_token: string;
+    id_token?: string;
+    expires_in: number;
+    account_id?: string;
+  };
+
+  return {
+    access_token: data.access_token,
+    refresh_token: data.refresh_token,
+    id_token: data.id_token,
+    expires_at: Math.floor(Date.now() / 1000) + data.expires_in,
+    account_id: data.account_id,
+  };
+}
+
+export async function refresh(
+  tokens: AuthTokens,
+  httpClient: HttpClient = fetch as HttpClient,
+): Promise<AuthTokens> {
+  const body = new URLSearchParams({
+    grant_type: 'refresh_token',
+    refresh_token: tokens.refresh_token,
+    client_id: CODEX_OAUTH.clientId,
+  });
+
+  const res = await httpClient(CODEX_OAUTH.tokenUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
+  });
+
+  if (!res.ok) {
+    throw new Error(`token refresh failed (status ${res.status})`);
+  }
+
+  const data = await res.json() as {
+    access_token: string;
+    refresh_token: string;
+    id_token?: string;
+    expires_in: number;
+    account_id?: string;
+  };
+
+  return {
+    access_token: data.access_token,
+    refresh_token: data.refresh_token,
+    id_token: data.id_token,
+    expires_at: Math.floor(Date.now() / 1000) + data.expires_in,
+    account_id: data.account_id,
+  };
+}
+
+// --- Token store ---
+
+function resolveStorePath(storePath?: string): string {
+  const p = storePath ?? CODEX_OAUTH.tokenStore;
+  return p.startsWith('~/') ? join(homedir(), p.slice(2)) : p;
+}
+
+export async function loadAuth(storePath?: string): Promise<AuthTokens | null> {
+  const resolved = resolveStorePath(storePath);
+  if (!existsSync(resolved)) return null;
+
+  let raw: string;
+  try {
+    raw = await readFile(resolved, 'utf8');
+  } catch {
+    return null;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error('auth file corrupt');
+  }
+
+  const t = parsed as Record<string, unknown>;
+  if (!t.access_token || !t.refresh_token || !t.expires_at) {
+    throw new Error('auth file corrupt');
+  }
+
+  return parsed as AuthTokens;
+}
+
+export async function saveAuth(tokens: AuthTokens, storePath?: string): Promise<void> {
+  const resolved = resolveStorePath(storePath);
+  const dir = dirname(resolved);
+  await mkdir(dir, { recursive: true });
+
+  const tmp = `${resolved}.tmp`;
+  // Write to .tmp then rename for atomicity; never log token fields
+  await writeFile(tmp, JSON.stringify(tokens, null, 2), { encoding: 'utf8', mode: 0o600 });
+  await rename(tmp, resolved);
 }
 
 // --- Orchestration ---
