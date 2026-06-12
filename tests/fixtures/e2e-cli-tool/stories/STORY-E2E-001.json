@@ -1,0 +1,21 @@
+{
+  "kind": "patch_proposal",
+  "proposal_id": "e2e-001-p1",
+  "story_id": "STORY-E2E-001",
+  "contract_id": "e2e-001-c1",
+  "contract_version": 1,
+  "summary": "Create src/calc.ts with add, subtract, multiply, divide functions",
+  "change_type": "ADD",
+  "changed_files": ["src/calc.ts"],
+  "patch_branch": "e2e-story-001",
+  "patch_text": "diff --git a/src/calc.ts b/src/calc.ts\nnew file mode 100644\n--- /dev/null\n+++ b/src/calc.ts\n@@ -0,0 +1,4 @@\n+export function add(a: number, b: number): number { return a + b; }\n+export function subtract(a: number, b: number): number { return a - b; }\n+export function multiply(a: number, b: number): number { return a * b; }\n+export function divide(a: number, b: number): number { return a / b; }\n",
+  "rollback_notes": "Delete src/calc.ts to revert",
+  "postconditions_claimed": ["calc_functions_exported"],
+  "proposed_at": "2026-01-01T00:00:00.000Z",
+  "status": "proposed",
+  "validation_commands": ["node --experimental-strip-types src/calc.ts"],
+  "allowed_write_set": ["src/**"],
+  "acceptance_criteria": {
+    "behaviors_must_pass": ["calc_functions_exported"]
+  }
+}

@@ -32,12 +32,18 @@ importers:
       '@codeharness/permission-gateway':
         specifier: workspace:*
         version: link:packages/permission-gateway
+      '@codeharness/planning-steward':
+        specifier: workspace:*
+        version: link:packages/planning-steward
       '@codeharness/preflight-runner':
         specifier: workspace:*
         version: link:packages/preflight-runner
       '@codeharness/shared':
         specifier: workspace:*
         version: link:packages/shared
+      '@codeharness/task-graph':
+        specifier: workspace:*
+        version: link:packages/task-graph
       '@codeharness/tool-executor':
         specifier: workspace:*
         version: link:packages/tool-executor

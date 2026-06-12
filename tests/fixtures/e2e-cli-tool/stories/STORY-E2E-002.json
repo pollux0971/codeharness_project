@@ -1,0 +1,21 @@
+{
+  "kind": "patch_proposal",
+  "proposal_id": "e2e-002-p1",
+  "story_id": "STORY-E2E-002",
+  "contract_id": "e2e-002-c1",
+  "contract_version": 1,
+  "summary": "Create src/cli.ts that handles argv and delegates to calc.ts",
+  "change_type": "ADD",
+  "changed_files": ["src/cli.ts"],
+  "patch_branch": "e2e-story-002",
+  "patch_text": "diff --git a/src/cli.ts b/src/cli.ts\nnew file mode 100644\n--- /dev/null\n+++ b/src/cli.ts\n@@ -0,0 +1,7 @@\n+import { add, subtract, multiply, divide } from './calc.ts';\n+const [op, a, b] = process.argv.slice(2);\n+const x = Number(a), y = Number(b);\n+const ops: Record<string, (a: number, b: number) => number> = { add, subtract, multiply, divide };\n+const fn = ops[op];\n+if (!fn) { console.error('unknown op:', op); process.exit(1); }\n+console.log(fn(x, y));\n",
+  "rollback_notes": "Delete src/cli.ts to revert",
+  "postconditions_claimed": ["cli_dispatches_to_calc"],
+  "proposed_at": "2026-01-01T00:00:00.000Z",
+  "status": "proposed",
+  "validation_commands": ["node --experimental-strip-types src/cli.ts add 2 3"],
+  "allowed_write_set": ["src/**"],
+  "acceptance_criteria": {
+    "behaviors_must_pass": ["cli_dispatches_to_calc"]
+  }
+}

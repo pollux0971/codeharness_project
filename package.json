@@ -11,6 +11,8 @@
   "devDependencies": {
     "@codeharness/agent-output": "workspace:*",
     "@codeharness/context-manager": "workspace:*",
+    "@codeharness/planning-steward": "workspace:*",
+    "@codeharness/task-graph": "workspace:*",
     "@codeharness/debugger-runtime": "workspace:*",
     "@codeharness/event-log": "workspace:*",
     "@codeharness/failure-bank": "workspace:*",
