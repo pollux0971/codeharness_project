@@ -774,6 +774,38 @@
         "at": "2026-06-12T10:14:37.257809Z"
       },
       "leakage_audit": "unrun"
+    },
+    {
+      "skill_id": "planning-steward.architecture-recovery",
+      "path": "skills/planning-steward/architecture-recovery",
+      "status": "needs_tests",
+      "version": "0.1.0",
+      "agent_role": "planning_steward",
+      "source_story": "STORY-020.6"
+    },
+    {
+      "skill_id": "planning-steward.as-is-documentation",
+      "path": "skills/planning-steward/as-is-documentation",
+      "status": "needs_tests",
+      "version": "0.1.0",
+      "agent_role": "planning_steward",
+      "source_story": "STORY-020.6"
+    },
+    {
+      "skill_id": "planning-steward.delta-spec-authoring",
+      "path": "skills/planning-steward/delta-spec-authoring",
+      "status": "needs_tests",
+      "version": "0.1.0",
+      "agent_role": "planning_steward",
+      "source_story": "STORY-020.6"
+    },
+    {
+      "skill_id": "supervisor.impact-aware-contract",
+      "path": "skills/supervisor/impact-aware-contract",
+      "status": "needs_tests",
+      "version": "0.1.0",
+      "agent_role": "supervisor",
+      "source_story": "STORY-020.6"
     }
   ]
 }

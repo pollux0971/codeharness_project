@@ -1,0 +1,28 @@
+{
+  "skill_id": "planning-steward.as-is-documentation",
+  "agent_role": "planning_steward",
+  "description": "Write concise as-is/ARCHITECTURE.md and as-is/CONVENTIONS.md from recovery findings. Fact-only, no forward-looking language.",
+  "version": "0.1.0",
+  "status": "needs_tests",
+  "entry_documents": ["SKILL.md"],
+  "scripts": ["scripts/evaluate.py"],
+  "tests": ["tests/test_skill.py"],
+  "validation": ["pytest -q tests/"],
+  "memory_file": ".memory.md",
+  "depends_on": ["planning-steward.architecture-recovery"],
+  "enhances": [],
+  "provenance": {
+    "source_story": "STORY-020.6",
+    "source_trajectory": "",
+    "created_by": "harness"
+  },
+  "failure_signatures": ["forward_looking_language", "missing_entry_mention", "content_too_short"],
+  "last_evaluation": {
+    "passed": 0,
+    "total": 0,
+    "fresh_runs": 0,
+    "pass_rate": 0.0,
+    "at": ""
+  },
+  "leakage_audit": "unrun"
+}

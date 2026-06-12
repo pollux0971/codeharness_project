@@ -1,0 +1,28 @@
+{
+  "skill_id": "supervisor.impact-aware-contract",
+  "agent_role": "supervisor",
+  "description": "Issue a brownfield story contract with impact set, regression test list, rollback ref, and authorized write-set.",
+  "version": "0.1.0",
+  "status": "needs_tests",
+  "entry_documents": ["SKILL.md"],
+  "scripts": ["scripts/evaluate.py"],
+  "tests": ["tests/test_skill.py"],
+  "validation": ["pytest -q tests/"],
+  "memory_file": ".memory.md",
+  "depends_on": ["planning-steward.delta-spec-authoring"],
+  "enhances": [],
+  "provenance": {
+    "source_story": "STORY-020.6",
+    "source_trajectory": "",
+    "created_by": "harness"
+  },
+  "failure_signatures": ["missing_impact_set", "missing_regression_tests", "missing_rollback_ref"],
+  "last_evaluation": {
+    "passed": 0,
+    "total": 0,
+    "fresh_runs": 0,
+    "pass_rate": 0.0,
+    "at": ""
+  },
+  "leakage_audit": "unrun"
+}
