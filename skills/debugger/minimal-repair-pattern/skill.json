@@ -1,0 +1,28 @@
+{
+  "skill_id": "debugger.minimal-repair-pattern",
+  "agent_role": "debugger",
+  "description": "Apply the smallest reversible fix using one GRASP operator, one concern, within the existing write-set; never rewrites the feature or adds scope.",
+  "version": "0.1.0",
+  "status": "needs_tests",
+  "entry_documents": ["SKILL.md"],
+  "scripts": ["scripts/evaluate.py"],
+  "tests": ["tests/test_skill.py"],
+  "validation": ["pytest -q tests/"],
+  "memory_file": ".memory.md",
+  "depends_on": ["debugger.failure-triage"],
+  "enhances": [],
+  "provenance": {
+    "source_story": "STORY-014.4",
+    "source_trajectory": "",
+    "created_by": "harness"
+  },
+  "failure_signatures": [],
+  "last_evaluation": {
+    "passed": 0,
+    "total": 0,
+    "fresh_runs": 0,
+    "pass_rate": 0.0,
+    "at": ""
+  },
+  "leakage_audit": "unrun"
+}

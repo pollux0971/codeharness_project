@@ -502,6 +502,158 @@
         "at": "2026-06-12T09:54:58.874242+00:00"
       },
       "leakage_audit": "unrun"
+    },
+    {
+      "skill_id": "debugger.root-cause-analysis",
+      "agent_role": "debugger",
+      "description": "Bisect discipline for locating the true root cause via falsifiable hypothesis and one of five structured methods; never widens scope.",
+      "version": "0.1.0",
+      "status": "registered",
+      "entry_documents": [
+        "SKILL.md"
+      ],
+      "scripts": [
+        "scripts/evaluate.py"
+      ],
+      "tests": [
+        "tests/test_skill.py"
+      ],
+      "validation": [
+        "pytest -q tests/"
+      ],
+      "memory_file": ".memory.md",
+      "depends_on": [
+        "debugger.failure-triage"
+      ],
+      "enhances": [],
+      "provenance": {
+        "source_story": "STORY-014.4",
+        "source_trajectory": "",
+        "created_by": "harness"
+      },
+      "failure_signatures": [],
+      "last_evaluation": {
+        "passed": 5,
+        "total": 5,
+        "fresh_runs": 1,
+        "pass_rate": 1.0,
+        "at": "2026-06-12T10:09:17.945974Z"
+      },
+      "leakage_audit": "unrun"
+    },
+    {
+      "skill_id": "debugger.minimal-repair-pattern",
+      "agent_role": "debugger",
+      "description": "Apply the smallest reversible fix using one GRASP operator, one concern, within the existing write-set; never rewrites the feature or adds scope.",
+      "version": "0.1.0",
+      "status": "registered",
+      "entry_documents": [
+        "SKILL.md"
+      ],
+      "scripts": [
+        "scripts/evaluate.py"
+      ],
+      "tests": [
+        "tests/test_skill.py"
+      ],
+      "validation": [
+        "pytest -q tests/"
+      ],
+      "memory_file": ".memory.md",
+      "depends_on": [
+        "debugger.failure-triage"
+      ],
+      "enhances": [],
+      "provenance": {
+        "source_story": "STORY-014.4",
+        "source_trajectory": "",
+        "created_by": "harness"
+      },
+      "failure_signatures": [],
+      "last_evaluation": {
+        "passed": 5,
+        "total": 5,
+        "fresh_runs": 1,
+        "pass_rate": 1.0,
+        "at": "2026-06-12T10:09:18.119660Z"
+      },
+      "leakage_audit": "unrun"
+    },
+    {
+      "skill_id": "debugger.failure-gene-authoring",
+      "agent_role": "debugger",
+      "description": "Emit well-formed FailureGene objects with imperative avoid lines, pipe-separated matching signals, and consolidated_count increment on recurrence.",
+      "version": "0.1.0",
+      "status": "registered",
+      "entry_documents": [
+        "SKILL.md"
+      ],
+      "scripts": [
+        "scripts/evaluate.py"
+      ],
+      "tests": [
+        "tests/test_skill.py"
+      ],
+      "validation": [
+        "pytest -q tests/"
+      ],
+      "memory_file": ".memory.md",
+      "depends_on": [
+        "debugger.failure-triage"
+      ],
+      "enhances": [],
+      "provenance": {
+        "source_story": "STORY-014.4",
+        "source_trajectory": "",
+        "created_by": "harness"
+      },
+      "failure_signatures": [],
+      "last_evaluation": {
+        "passed": 5,
+        "total": 5,
+        "fresh_runs": 1,
+        "pass_rate": 1.0,
+        "at": "2026-06-12T10:09:18.282117Z"
+      },
+      "leakage_audit": "unrun"
+    },
+    {
+      "skill_id": "debugger.flaky-test-detection",
+      "agent_role": "debugger",
+      "description": "Discriminate real failures from flaky tests via 3-run re-run protocol; classify as real_failure, flaky, intermittent, or undetermined before any escalation.",
+      "version": "0.1.0",
+      "status": "registered",
+      "entry_documents": [
+        "SKILL.md"
+      ],
+      "scripts": [
+        "scripts/evaluate.py"
+      ],
+      "tests": [
+        "tests/test_skill.py"
+      ],
+      "validation": [
+        "pytest -q tests/"
+      ],
+      "memory_file": ".memory.md",
+      "depends_on": [
+        "debugger.failure-triage"
+      ],
+      "enhances": [],
+      "provenance": {
+        "source_story": "STORY-014.4",
+        "source_trajectory": "",
+        "created_by": "harness"
+      },
+      "failure_signatures": [],
+      "last_evaluation": {
+        "passed": 5,
+        "total": 5,
+        "fresh_runs": 1,
+        "pass_rate": 1.0,
+        "at": "2026-06-12T10:09:18.449923Z"
+      },
+      "leakage_audit": "unrun"
     }
   ]
 }
