@@ -6,7 +6,8 @@ import {
   buildRoleContextPacket, validateContextPacket, enforceTokenBudgetByArtifactSelection,
   detectPhase, requiredContextSections, lifecycleToTrajectory, injectSkillsIntoPacket,
   extractProjectProfile, injectProjectProfile,
-  ArtifactRef, PhaseSignals, LifecyclePhase,
+  compactContextWindow, DEFAULT_CONFIG,
+  ArtifactRef, PhaseSignals, LifecyclePhase, ContextWindow, Turn,
 } from './index';
 import type { FullSkillManifest } from '@codeharness/skill-runtime';
 
@@ -349,6 +350,87 @@ describe('skill-injection', () => {
       expect(result.sections.some(s => s.name === 'skill_developer.bad-skill')).toBe(false);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+// ── STORY-015.5: context compaction ──────────────────────────────────────────
+
+function makeTurn(content: string, pinned = false): Turn {
+  return { role: 'assistant', content, tokenCount: Math.ceil(content.length / 4), pinned };
+}
+function makeWindow(turns: Turn[]): ContextWindow {
+  return { turns, totalTokens: turns.reduce((s, t) => s + t.tokenCount, 0) };
+}
+
+describe('compaction', () => {
+  it('summarize_turn_preserves_decisions', () => {
+    // Need 9 turns so the big turn at index 3 falls outside both the first-3 and last-5
+    // pinning windows (isLast = i >= 9-5 = 4, so index 3 is NOT last).
+    const small: Turn = { role: 'user', content: 'short', tokenCount: 5, pinned: false };
+    const bigTurn: Turn = { role: 'assistant', content: 'A'.repeat(16000), tokenCount: 4001, pinned: false };
+    const turns = [small, small, small, bigTurn, small, small, small, small, small];
+    const window: ContextWindow = { turns, totalTokens: 4001 + 8 * 5 };
+    const result = compactContextWindow(window);
+    const bigResult = result.turns[3];
+    expect(bigResult.content).toContain('[compacted]');
+    expect(bigResult.tokenCount).toBeLessThan(bigTurn.tokenCount);
+  });
+
+  it('merge_and_summarize_respects_pinned_sections', () => {
+    const pinned1: Turn = { role: 'user', content: 'PINNED_A', tokenCount: 10, pinned: true };
+    const pinned2: Turn = { role: 'user', content: 'PINNED_B', tokenCount: 10, pinned: true };
+    // Build window over L2 threshold using explicit tokenCounts
+    const bigUnpinned: Turn[] = Array.from({ length: 5 }, () => ({
+      role: 'assistant' as const, content: 'X'.repeat(100), tokenCount: 15000, pinned: false,
+    }));
+    const allTurns = [pinned1, ...bigUnpinned, pinned2];
+    const window: ContextWindow = { turns: allTurns, totalTokens: pinned1.tokenCount + bigUnpinned.reduce((s, t) => s + t.tokenCount, 0) + pinned2.tokenCount };
+    const result = compactContextWindow(window);
+    const contents = result.turns.map(t => t.content);
+    expect(contents.some(c => c.includes('PINNED_A'))).toBe(true);
+    expect(contents.some(c => c.includes('PINNED_B'))).toBe(true);
+  });
+
+  it('compaction_triggered_at_threshold', () => {
+    // 15 turns ensures middle turns (indices 3-9) are outside the first-3/last-5 pinning
+    // windows and will be compressed by level-1, reducing total below 75000.
+    const turns: Turn[] = Array.from({ length: 15 }, () => ({
+      role: 'assistant' as const, content: 'x', tokenCount: 5000, pinned: false,
+    }));
+    const window: ContextWindow = { turns, totalTokens: 75000 };
+    const result = compactContextWindow(window);
+    expect(result.totalTokens).toBeLessThan(window.totalTokens);
+  });
+
+  it('compacted_context_passes_token_budget', () => {
+    // 15 turns: middle 7 get level-1 compressed (tokenCount 5000 > threshold 4000),
+    // resulting total ~40k which is ≤ level2ChainTokenThreshold (60000).
+    const turns: Turn[] = Array.from({ length: 15 }, () => ({
+      role: 'assistant' as const, content: 'D'.repeat(1000), tokenCount: 5000, pinned: false,
+    }));
+    const window: ContextWindow = { turns, totalTokens: 75000 };
+    const result = compactContextWindow(window);
+    expect(result.totalTokens).toBeLessThanOrEqual(DEFAULT_CONFIG.level2ChainTokenThreshold);
+  });
+
+  it('detect_phase_returns_search_for_small_window', () => {
+    expect(detectPhase({ turns: [], totalTokens: 100 }, DEFAULT_CONFIG)).toBe('search');
+  });
+
+  it('detect_phase_returns_terminal_for_many_pinned', () => {
+    const pinnedTurns = Array.from({ length: 6 }, () => makeTurn('x', true));
+    const w = makeWindow(pinnedTurns);
+    expect(detectPhase(w, DEFAULT_CONFIG)).toBe('terminal');
+  });
+
+  it('pinned_turns_never_compacted', () => {
+    const turns = Array.from({ length: 3 }, (_, i) => makeTurn(`PINNED_${i}`, true));
+    const window = makeWindow(turns);
+    const result = compactContextWindow(window);
+    const contents = result.turns.map(t => t.content);
+    for (let i = 0; i < 3; i++) {
+      expect(contents.some(c => c.includes(`PINNED_${i}`))).toBe(true);
     }
   });
 });

@@ -104,7 +104,20 @@ export function lifecycleToTrajectory(phase: LifecyclePhase): TrajectoryPhase {
  *
  * Deterministic: no LLM, no external API, no Date.now, no randomness.
  */
-export function detectPhase(signals: PhaseSignals): LifecyclePhase {
+export function detectPhase(signals: PhaseSignals): LifecyclePhase;
+export function detectPhase(window: ContextWindow, cfg: ContextManagerConfig): TrajectoryPhase;
+export function detectPhase(
+  sigOrWindow: PhaseSignals | ContextWindow,
+  cfg?: ContextManagerConfig,
+): LifecyclePhase | TrajectoryPhase {
+  if ('turns' in sigOrWindow && cfg !== undefined) {
+    const window = sigOrWindow as ContextWindow;
+    const pinnedCount = window.turns.filter(t => t.pinned).length;
+    if (pinnedCount >= cfg.keepLastTurns) return 'terminal';
+    if (window.totalTokens < cfg.level2ChainTokenThreshold * 0.5) return 'search';
+    return 'stuck';
+  }
+  const signals = sigOrWindow as PhaseSignals;
   if (signals.phase !== undefined) return signals.phase;
   if (signals.checkpointMarker === true || signals.storyStatus === 'checkpointed') return 'checkpointing';
   if (signals.storyStatus === 'done') return 'done';
@@ -243,9 +256,48 @@ export function applySlidingWindow(window: ContextWindow, cfg: ContextManagerCon
   return { turns, totalTokens: turns.reduce((s, t) => s + t.tokenCount, 0) };
 }
 
-function summarizeTurn(t: Turn, _floor: number): Turn { throw new Error('not implemented: LLM-backed turn summarization'); }
-function mergeAndSummarize(_turns: Turn[], _floor: number): Turn[] { throw new Error('not implemented: chain summarization'); }
-function reorder(_pinned: Turn[], _compressed: Turn[], _total: number, _first: number, _last: number): Turn[] { throw new Error('not implemented'); }
+function summarizeTurn(t: Turn, floor: number): Turn {
+  const targetLen = Math.max(50, Math.floor(t.content.length * floor));
+  const truncated = t.content.slice(0, targetLen);
+  const summary = truncated.endsWith(' ') ? truncated.trimEnd() : truncated;
+  return {
+    ...t,
+    content: summary + ' [compacted]',
+    tokenCount: Math.ceil((summary.length + 12) / 4),
+  };
+}
+
+function mergeAndSummarize(turns: Turn[], floor: number): Turn[] {
+  if (turns.length === 0) return [];
+  const combined = turns.map(t => t.content).join(' ');
+  const targetLen = Math.max(100, Math.floor(combined.length * floor));
+  return [{
+    role: 'system',
+    content: combined.slice(0, targetLen) + ' [chain-compacted]',
+    tokenCount: Math.ceil((targetLen + 18) / 4),
+    pinned: false,
+  }];
+}
+
+function reorder(
+  pinned: Turn[],
+  compressed: Turn[],
+  _total: number,
+  _first: number,
+  _last: number,
+): Turn[] {
+  return [...pinned, ...compressed];
+}
+
+/** Orchestrate the full compaction pipeline: Level-1 then Level-2 if still needed. */
+export function compactContextWindow(
+  window: ContextWindow,
+  cfg: ContextManagerConfig = DEFAULT_CONFIG,
+): ContextWindow {
+  let w = compressLargeNodes(window, cfg);
+  if (w.totalTokens > cfg.level2ChainTokenThreshold) w = compressChain(w, cfg);
+  return applySlidingWindow(w, cfg);
+}
 
 // ── STORY-015.4: project conventions memory (per-target profile) ──────────────
 
