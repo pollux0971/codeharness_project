@@ -12,6 +12,7 @@
     "@codeharness/agent-output": "workspace:*",
     "@codeharness/context-manager": "workspace:*",
     "@codeharness/debugger-runtime": "workspace:*",
+    "@codeharness/event-log": "workspace:*",
     "@codeharness/failure-bank": "workspace:*",
     "@codeharness/harness-core": "workspace:*",
     "@codeharness/model-gateway": "workspace:*",

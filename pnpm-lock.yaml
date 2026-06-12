@@ -17,6 +17,9 @@ importers:
       '@codeharness/debugger-runtime':
         specifier: workspace:*
         version: link:packages/debugger-runtime
+      '@codeharness/event-log':
+        specifier: workspace:*
+        version: link:packages/event-log
       '@codeharness/failure-bank':
         specifier: workspace:*
         version: link:packages/failure-bank

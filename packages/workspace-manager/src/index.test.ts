@@ -5,9 +5,10 @@ import path from 'node:path';
 import {
   isPathInsideRoot, resolveInsideWorkspace, WorkspaceRegistry, detectSymlinkEscape,
   makeOracle, createDisposableWorkspace, applyPatch, collectDiff, cleanupWorkspace, seedFile, commitAll,
-  bootstrapGreenfieldWorkspace, WorkspaceIsolationPool,
+  bootstrapGreenfieldWorkspace, WorkspaceIsolationPool, isPromotable,
   type GreenfieldWorkspaceInput,
 } from './index';
+import type { ProjectRunState } from '@codeharness/harness-core';
 
 let ws: string; let outside: string;
 beforeEach(() => {
@@ -245,6 +246,46 @@ describe('workspace-manager', () => {
       const spread = Math.max(...startTimes) - Math.min(...startTimes);
       expect(spread).toBeLessThan(100);
       for (const r of runs) cleanupWorkspace(reg, r.workspace);
+    });
+  });
+
+  // ---- STORY-012.1: Promotion guard ----
+  describe('promotion-guard', () => {
+    function makeRunState(stories: { status: string; checkpoint_sha: string | null }[]): ProjectRunState {
+      return {
+        schema_version: 1, project_id: 'p', run_id: 'r',
+        created_at: '', updated_at: '', current_story: null, last_decision: null,
+        iterations_used: 0, run_iteration_budget: 10,
+        stories: stories.map((s, i) => ({
+          story_id: `STORY-00${i}`, status: s.status as any,
+          attempts: 0, attempt_budget: 3,
+          checkpoint_sha: s.checkpoint_sha,
+          last_action: null, last_result: null, blocked_reason: null,
+        })),
+      };
+    }
+
+    it('only_checkpointed_runs_promotable', () => {
+      const allDone = makeRunState([
+        { status: 'done', checkpoint_sha: 'abc' },
+        { status: 'done', checkpoint_sha: 'def' },
+      ]);
+      expect(isPromotable(allDone)).toBe(true);
+    });
+
+    it('not_promotable_when_story_not_done', () => {
+      const partial = makeRunState([
+        { status: 'done', checkpoint_sha: 'abc' },
+        { status: 'in_progress', checkpoint_sha: null },
+      ]);
+      expect(isPromotable(partial)).toBe(false);
+    });
+
+    it('not_promotable_when_checkpoint_sha_missing', () => {
+      const noSha = makeRunState([
+        { status: 'done', checkpoint_sha: null },
+      ]);
+      expect(isPromotable(noSha)).toBe(false);
     });
   });
 

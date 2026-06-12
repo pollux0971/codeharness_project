@@ -241,6 +241,20 @@ export function bootstrapGreenfieldWorkspace(
   };
 }
 
+// ---- STORY-012.1: Promotion guard ----
+
+/**
+ * Returns true only if every story in the run is 'done' AND has a non-null checkpoint_sha.
+ * Uses a structural type so workspace-manager stays dependency-free from harness-core.
+ */
+export function isPromotable(
+  runState: { stories: Array<{ status: string; checkpoint_sha: string | null }> },
+): boolean {
+  return runState.stories.every(
+    s => s.status === 'done' && s.checkpoint_sha !== null,
+  );
+}
+
 // ---- STORY-010.4: Parallel story execution in isolated workspaces ----
 
 export interface IsolatedRun {
