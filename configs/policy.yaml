@@ -38,3 +38,7 @@ real_api_calls:
   enabled: false
   kill_switch: false
   ci_override: true   # when CI env var is set, gateway ignores enabled:true
+
+quality_bar:
+  required_checks: [build, test, typecheck]
+  coverage_threshold: null   # set to a number (e.g. 80) to enable coverage gate

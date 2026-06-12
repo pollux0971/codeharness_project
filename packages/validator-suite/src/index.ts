@@ -86,6 +86,79 @@ export function validatePromotionGate(g: {
   return { ok: e.length === 0, errors: e };
 }
 
+// ── STORY-013.3: Quality Bar ─────────────────────────────────────────────────
+
+export type QualityBarCheck = 'build' | 'test' | 'typecheck' | 'coverage';
+
+export interface QualityBarConfig {
+  required_checks: QualityBarCheck[];
+  coverage_threshold?: number;
+}
+
+export const DEFAULT_QUALITY_BAR: QualityBarConfig = {
+  required_checks: ['build', 'test', 'typecheck'],
+};
+
+export interface QualityBarCheckResult {
+  check: QualityBarCheck;
+  passed: boolean;
+  output: string;
+}
+
+export interface QualityBarResult {
+  ok: boolean;
+  config: QualityBarConfig;
+  results: QualityBarCheckResult[];
+  errors: string[];
+}
+
+export interface QualityBarRunner {
+  build(): Promise<{ passed: boolean; output: string }>;
+  test(): Promise<{ passed: boolean; output: string }>;
+  typecheck(): Promise<{ passed: boolean; output: string }>;
+  coverage?(): Promise<{ passed: boolean; output: string; percent?: number }>;
+}
+
+export async function runQualityBar(
+  config: QualityBarConfig,
+  runner: QualityBarRunner
+): Promise<QualityBarResult> {
+  const checkResults = await Promise.all(
+    config.required_checks.map(async (check): Promise<QualityBarCheckResult> => {
+      try {
+        if (check === 'coverage') {
+          const raw = await runner.coverage!();
+          let { passed, output } = raw;
+          if (config.coverage_threshold !== undefined && config.coverage_threshold !== null) {
+            if (raw.percent !== undefined && raw.percent < config.coverage_threshold) {
+              passed = false;
+              output = `${output} coverage below threshold: ${raw.percent}% < ${config.coverage_threshold}%`;
+            }
+          }
+          return { check, passed, output };
+        }
+        const raw = await runner[check]();
+        return { check, passed: raw.passed, output: raw.output };
+      } catch (err) {
+        return { check, passed: false, output: err instanceof Error ? err.message : String(err) };
+      }
+    })
+  );
+
+  const ok = checkResults.every(r => r.passed);
+  const errors = checkResults.filter(r => !r.passed).map(r => `${r.check}: ${r.output}`);
+  return { ok, config, results: checkResults, errors };
+}
+
+export function validateQualityBar(result: QualityBarResult): ValidationResult {
+  const errors = result.results
+    .filter(r => !r.passed)
+    .map(r => `quality bar check failed: ${r.check} — ${r.output}`);
+  return { ok: errors.length === 0, errors };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export interface StubRef { symbol: string; file: string }
 export interface StubRegistryEntry { symbol: string; file: string; owner: string }
 /** Every documented `not implemented` stub MUST be registered with an owner that is a

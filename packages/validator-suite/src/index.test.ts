@@ -3,6 +3,8 @@ import {
   validateStoryContract, validateAcceptanceCriteria, validateForbiddenActions,
   validateWriteSet, validatePromotionGate, validateNoSecretLeak, validateDocumentedStubsHaveStory, specConformanceGate,
   validatePlanningBundle, requiredPlanningBundleFiles, planningBundleValidationGate,
+  runQualityBar, validateQualityBar, DEFAULT_QUALITY_BAR,
+  type QualityBarConfig, type QualityBarRunner,
 } from './index';
 
 const goodContract = {
@@ -226,5 +228,90 @@ describe('STORY-009.3: planningBundleValidationGate', () => {
     const serialized = results.map(r => JSON.stringify(r));
     expect(serialized[0]).toBe(serialized[1]);
     expect(serialized[1]).toBe(serialized[2]);
+  });
+});
+
+// ── STORY-013.3: quality-bar ──────────────────────────────────────────────────
+
+const pass = async () => ({ passed: true, output: 'ok' });
+const fail = async () => ({ passed: false, output: 'error: failed' });
+const throws = async (): Promise<{ passed: boolean; output: string }> => { throw new Error('runner crashed'); };
+
+function makeRunner(overrides: Partial<QualityBarRunner> = {}): QualityBarRunner {
+  return { build: pass, test: pass, typecheck: pass, ...overrides };
+}
+
+describe('quality-bar', () => {
+  it('default_bar_build_test_typecheck', () => {
+    expect(DEFAULT_QUALITY_BAR.required_checks).toEqual(['build', 'test', 'typecheck']);
+  });
+
+  it('quality_bar_configurable', async () => {
+    const called: string[] = [];
+    const runner: QualityBarRunner = {
+      build:     async () => { called.push('build');     return { passed: true, output: '' }; },
+      test:      async () => { called.push('test');      return { passed: true, output: '' }; },
+      typecheck: async () => { called.push('typecheck'); return { passed: true, output: '' }; },
+    };
+    const cfg: QualityBarConfig = { required_checks: ['test'] };
+    const result = await runQualityBar(cfg, runner);
+    expect(result.ok).toBe(true);
+    expect(called).toEqual(['test']);
+  });
+
+  it('bar_failures_block_promotion_all_pass', async () => {
+    const result = await runQualityBar(DEFAULT_QUALITY_BAR, makeRunner());
+    expect(result.ok).toBe(true);
+    expect(validateQualityBar(result).ok).toBe(true);
+  });
+
+  it('bar_failures_block_promotion_one_fails', async () => {
+    const result = await runQualityBar(DEFAULT_QUALITY_BAR, makeRunner({ typecheck: fail }));
+    expect(result.ok).toBe(false);
+    const v = validateQualityBar(result);
+    expect(v.ok).toBe(false);
+    expect(v.errors.join(' ')).toMatch(/typecheck/);
+  });
+
+  it('coverage_threshold_blocks_when_below', async () => {
+    const cfg: QualityBarConfig = { required_checks: ['coverage'], coverage_threshold: 80 };
+    const runner: QualityBarRunner = {
+      build: pass, test: pass, typecheck: pass,
+      coverage: async () => ({ passed: true, output: '70%', percent: 70 }),
+    };
+    const result = await runQualityBar(cfg, runner);
+    expect(result.ok).toBe(false);
+    expect(result.results[0].output).toMatch(/below threshold/);
+  });
+
+  it('coverage_threshold_passes_when_above', async () => {
+    const cfg: QualityBarConfig = { required_checks: ['coverage'], coverage_threshold: 80 };
+    const runner: QualityBarRunner = {
+      build: pass, test: pass, typecheck: pass,
+      coverage: async () => ({ passed: true, output: '85%', percent: 85 }),
+    };
+    const result = await runQualityBar(cfg, runner);
+    expect(result.ok).toBe(true);
+  });
+
+  it('failing_runner_treated_as_failed_check', async () => {
+    const result = await runQualityBar(DEFAULT_QUALITY_BAR, makeRunner({ build: throws }));
+    expect(result.ok).toBe(false);
+    const buildResult = result.results.find(r => r.check === 'build')!;
+    expect(buildResult.passed).toBe(false);
+    expect(buildResult.output).toMatch(/runner crashed/);
+  });
+
+  it('only_required_checks_run', async () => {
+    const called: string[] = [];
+    const runner: QualityBarRunner = {
+      build:     async () => { called.push('build');     return { passed: true, output: '' }; },
+      test:      async () => { called.push('test');      return { passed: true, output: '' }; },
+      typecheck: async () => { called.push('typecheck'); return { passed: true, output: '' }; },
+    };
+    await runQualityBar({ required_checks: ['build'] }, runner);
+    expect(called).toEqual(['build']);
+    expect(called).not.toContain('test');
+    expect(called).not.toContain('typecheck');
   });
 });
