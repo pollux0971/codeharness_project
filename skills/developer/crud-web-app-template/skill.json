@@ -1,0 +1,32 @@
+{
+  "skill_id": "developer.crud-web-app-template",
+  "agent_role": "developer",
+  "description": "Scaffold spec for a Vite+React CRUD web app — correct directory structure, build/test/typecheck commands, placeholder components, and the quality bar commands.",
+  "version": "0.1.0",
+  "status": "needs_tests",
+  "entry_documents": ["SKILL.md"],
+  "scripts": ["scripts/evaluate.py"],
+  "tests": ["tests/test_skill.py"],
+  "validation": ["pytest -q tests/"],
+  "memory_file": ".memory.md",
+  "depends_on": [],
+  "enhances": [],
+  "provenance": {
+    "source_story": "STORY-014.5",
+    "source_trajectory": "",
+    "created_by": "harness"
+  },
+  "failure_signatures": [
+    "missing|vite-react",
+    "quality_bar_commands|missing",
+    "directories|missing"
+  ],
+  "last_evaluation": {
+    "passed": 0,
+    "total": 0,
+    "fresh_runs": 0,
+    "pass_rate": 0.0,
+    "at": ""
+  },
+  "leakage_audit": "unrun"
+}

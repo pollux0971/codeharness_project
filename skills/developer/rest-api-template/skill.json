@@ -1,0 +1,32 @@
+{
+  "skill_id": "developer.rest-api-template",
+  "agent_role": "developer",
+  "description": "Scaffold spec for a Node/TS REST service — express or fastify, /health endpoint, build/test/typecheck quality bar.",
+  "version": "0.1.0",
+  "status": "needs_tests",
+  "entry_documents": ["SKILL.md"],
+  "scripts": ["scripts/evaluate.py"],
+  "tests": ["tests/test_skill.py"],
+  "validation": ["pytest -q tests/"],
+  "memory_file": ".memory.md",
+  "depends_on": [],
+  "enhances": [],
+  "provenance": {
+    "source_story": "STORY-014.5",
+    "source_trajectory": "",
+    "created_by": "harness"
+  },
+  "failure_signatures": [
+    "missing|health|route",
+    "unsupported|framework",
+    "quality_bar_commands|missing"
+  ],
+  "last_evaluation": {
+    "passed": 0,
+    "total": 0,
+    "fresh_runs": 0,
+    "pass_rate": 0.0,
+    "at": ""
+  },
+  "leakage_audit": "unrun"
+}

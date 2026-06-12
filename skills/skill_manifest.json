@@ -654,6 +654,126 @@
         "at": "2026-06-12T10:09:18.449923Z"
       },
       "leakage_audit": "unrun"
+    },
+    {
+      "skill_id": "developer.crud-web-app-template",
+      "agent_role": "developer",
+      "description": "Scaffold spec for a Vite+React CRUD web app \u2014 correct directory structure, build/test/typecheck commands, placeholder components, and the quality bar commands.",
+      "version": "0.1.0",
+      "status": "registered",
+      "entry_documents": [
+        "SKILL.md"
+      ],
+      "scripts": [
+        "scripts/evaluate.py"
+      ],
+      "tests": [
+        "tests/test_skill.py"
+      ],
+      "validation": [
+        "pytest -q tests/"
+      ],
+      "memory_file": ".memory.md",
+      "depends_on": [],
+      "enhances": [],
+      "provenance": {
+        "source_story": "STORY-014.5",
+        "source_trajectory": "",
+        "created_by": "harness"
+      },
+      "failure_signatures": [
+        "missing|vite-react",
+        "quality_bar_commands|missing",
+        "directories|missing"
+      ],
+      "last_evaluation": {
+        "passed": 6,
+        "total": 6,
+        "fresh_runs": 1,
+        "pass_rate": 1.0,
+        "at": "2026-06-12T10:14:36.924055Z"
+      },
+      "leakage_audit": "unrun"
+    },
+    {
+      "skill_id": "developer.rest-api-template",
+      "agent_role": "developer",
+      "description": "Scaffold spec for a Node/TS REST service \u2014 express or fastify, /health endpoint, build/test/typecheck quality bar.",
+      "version": "0.1.0",
+      "status": "registered",
+      "entry_documents": [
+        "SKILL.md"
+      ],
+      "scripts": [
+        "scripts/evaluate.py"
+      ],
+      "tests": [
+        "tests/test_skill.py"
+      ],
+      "validation": [
+        "pytest -q tests/"
+      ],
+      "memory_file": ".memory.md",
+      "depends_on": [],
+      "enhances": [],
+      "provenance": {
+        "source_story": "STORY-014.5",
+        "source_trajectory": "",
+        "created_by": "harness"
+      },
+      "failure_signatures": [
+        "missing|health|route",
+        "unsupported|framework",
+        "quality_bar_commands|missing"
+      ],
+      "last_evaluation": {
+        "passed": 6,
+        "total": 6,
+        "fresh_runs": 1,
+        "pass_rate": 1.0,
+        "at": "2026-06-12T10:14:37.096149Z"
+      },
+      "leakage_audit": "unrun"
+    },
+    {
+      "skill_id": "developer.cli-tool-template",
+      "agent_role": "developer",
+      "description": "Scaffold spec for a Node/TS CLI tool \u2014 commander or yargs, at least one subcommand, bin entry point, build/test/typecheck quality bar.",
+      "version": "0.1.0",
+      "status": "registered",
+      "entry_documents": [
+        "SKILL.md"
+      ],
+      "scripts": [
+        "scripts/evaluate.py"
+      ],
+      "tests": [
+        "tests/test_skill.py"
+      ],
+      "validation": [
+        "pytest -q tests/"
+      ],
+      "memory_file": ".memory.md",
+      "depends_on": [],
+      "enhances": [],
+      "provenance": {
+        "source_story": "STORY-014.5",
+        "source_trajectory": "",
+        "created_by": "harness"
+      },
+      "failure_signatures": [
+        "missing|subcommand",
+        "missing|bin_entry",
+        "bad|arg_parser"
+      ],
+      "last_evaluation": {
+        "passed": 6,
+        "total": 6,
+        "fresh_runs": 1,
+        "pass_rate": 1.0,
+        "at": "2026-06-12T10:14:37.257809Z"
+      },
+      "leakage_audit": "unrun"
     }
   ]
 }
