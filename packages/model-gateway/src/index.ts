@@ -191,3 +191,78 @@ export async function callFirstValid(registry: ProviderRegistry, providerIds: st
   }
   return { ok: false, provider_id: providerIds.join(','), provider_kind: 'scripted', errors, usage: { inputTokens: 0, outputTokens: 0 } };
 }
+
+export interface BudgetConfig {
+  maxCallsPerStory: number;
+  maxTokensPerStory: number;
+  onExceed: 'escalate' | 'throw';
+}
+
+export type BudgetVerdict =
+  | { ok: true }
+  | { ok: false; reason: 'call_budget_exceeded' | 'token_budget_exceeded' | 'killed'; detail: string };
+
+export class BudgetGuard {
+  private calls = 0;
+  private tokens = 0;
+  private killed = false;
+  private killReason = '';
+
+  constructor(
+    private storyId: string,
+    private config: BudgetConfig = {
+      maxCallsPerStory: 30,
+      maxTokensPerStory: 400_000,
+      onExceed: 'escalate',
+    }
+  ) {}
+
+  check(): BudgetVerdict {
+    if (this.killed) {
+      return { ok: false, reason: 'killed', detail: `story ${this.storyId}: ${this.killReason || 'kill switch engaged'}` };
+    }
+    if (this.calls >= this.config.maxCallsPerStory) {
+      return { ok: false, reason: 'call_budget_exceeded', detail: `story ${this.storyId}: ${this.calls}/${this.config.maxCallsPerStory} calls used` };
+    }
+    if (this.tokens >= this.config.maxTokensPerStory) {
+      return { ok: false, reason: 'token_budget_exceeded', detail: `story ${this.storyId}: ${this.tokens}/${this.config.maxTokensPerStory} tokens used` };
+    }
+    return { ok: true };
+  }
+
+  record(usage: ProviderUsage): void {
+    this.calls += 1;
+    this.tokens += usage.inputTokens + usage.outputTokens;
+  }
+
+  kill(reason: string): void {
+    this.killed = true;
+    this.killReason = reason;
+  }
+
+  get isKilled(): boolean {
+    return this.killed;
+  }
+}
+
+export async function guardedCall(
+  guard: BudgetGuard,
+  provider: ModelProvider,
+  req: ModelGatewayRequest
+): Promise<ProviderResult> {
+  const verdict = guard.check();
+  if (!verdict.ok) {
+    return {
+      ok: false,
+      provider_id: provider.id,
+      provider_kind: provider.kind,
+      errors: [`${verdict.reason}: ${verdict.detail}`],
+      usage: { inputTokens: 0, outputTokens: 0 },
+    };
+  }
+  const result = await callProvider(provider, req);
+  if (result.ok) {
+    guard.record(result.usage);
+  }
+  return result;
+}

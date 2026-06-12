@@ -3,12 +3,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import {
+  BudgetGuard,
   callFirstValid,
   callProvider,
   createDisabledRemoteProvider,
   createFixtureProvider,
   createManualProvider,
   createScriptedProvider,
+  guardedCall,
   ProviderRegistry,
   validateStructuredOutput,
   type DeveloperOutput,
@@ -87,5 +89,50 @@ describe('model-gateway provider interface', () => {
     const r = await callFirstValid(registry, ['disabled', 'scripted'], req);
     expect(r.ok).toBe(true);
     expect(r.provider_id).toBe('scripted');
+  });
+});
+
+describe('budget-guard', () => {
+  it('per_story_call_budget_enforced', async () => {
+    const guard = new BudgetGuard('STORY-X', { maxCallsPerStory: 2, maxTokensPerStory: 999999, onExceed: 'escalate' });
+    const p = createScriptedProvider('p', [{ case_id: 'c', match: {}, output: goodDeveloperOutput }]);
+    const r1 = await guardedCall(guard, p, req); expect(r1.ok).toBe(true);
+    const r2 = await guardedCall(guard, p, req); expect(r2.ok).toBe(true);
+    const r3 = await guardedCall(guard, p, req);
+    expect(r3.ok).toBe(false);
+    expect(r3.errors.join(' ')).toMatch(/call_budget|budget/i);
+  });
+
+  it('token_budget_enforced', async () => {
+    const guard = new BudgetGuard('STORY-X', { maxCallsPerStory: 999, maxTokensPerStory: 1, onExceed: 'escalate' });
+    const p = createScriptedProvider('p', [{ case_id: 'c', match: {}, output: goodDeveloperOutput }]);
+    await guardedCall(guard, p, req);
+    const r2 = await guardedCall(guard, p, req);
+    expect(r2.ok).toBe(false);
+    expect(r2.errors.join(' ')).toMatch(/token_budget|token|budget/i);
+  });
+
+  it('overrun_blocks_and_escalates', async () => {
+    const guard = new BudgetGuard('STORY-Y', { maxCallsPerStory: 0, maxTokensPerStory: 999999, onExceed: 'escalate' });
+    const p = createScriptedProvider('p', [{ case_id: 'c', match: {}, output: goodDeveloperOutput }]);
+    const r = await guardedCall(guard, p, req);
+    expect(r.ok).toBe(false);
+  });
+
+  it('kill_switch_halts_all_provider_calls', async () => {
+    const guard = new BudgetGuard('STORY-Z', { maxCallsPerStory: 100, maxTokensPerStory: 999999, onExceed: 'escalate' });
+    const p = createScriptedProvider('p', [{ case_id: 'c', match: {}, output: goodDeveloperOutput }]);
+    guard.kill('operator kill switch engaged');
+    const r = await guardedCall(guard, p, req);
+    expect(r.ok).toBe(false);
+    expect(guard.isKilled).toBe(true);
+  });
+
+  it('record_accumulates_usage_correctly', () => {
+    const guard = new BudgetGuard('STORY-W', { maxCallsPerStory: 10, maxTokensPerStory: 100, onExceed: 'escalate' });
+    guard.record({ inputTokens: 40, outputTokens: 40 });
+    expect(guard.check().ok).toBe(true);
+    guard.record({ inputTokens: 10, outputTokens: 11 });
+    expect(guard.check().ok).toBe(false);
   });
 });

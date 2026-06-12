@@ -34,3 +34,6 @@ ask_commands:
 - curl
 - wget
 - chmod 777
+real_api_calls:
+  enabled: false
+  kill_switch: false
