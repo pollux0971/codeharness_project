@@ -9,11 +9,15 @@ import {
   createDisabledRemoteProvider,
   createFixtureProvider,
   createManualProvider,
+  createRealProvider,
   createScriptedProvider,
   guardedCall,
   ProviderRegistry,
+  resolveProviderIdsFromConfig,
   validateStructuredOutput,
   type DeveloperOutput,
+  type RealProviderHttpClient,
+  type RoutingConfig,
 } from './index';
 
 const goodDeveloperOutput: DeveloperOutput = {
@@ -89,6 +93,71 @@ describe('model-gateway provider interface', () => {
     const r = await callFirstValid(registry, ['disabled', 'scripted'], req);
     expect(r.ok).toBe(true);
     expect(r.provider_id).toBe('scripted');
+  });
+});
+
+describe('real-provider-adapter', () => {
+  it('real_provider_behind_gateway_interface', async () => {
+    const mockResponse = {
+      choices: [{ message: { content: JSON.stringify(goodDeveloperOutput) } }],
+      usage: { prompt_tokens: 10, completion_tokens: 20 },
+    };
+    const mockHttp: RealProviderHttpClient = async () => ({
+      ok: true, status: 200, json: async () => mockResponse,
+    });
+    const p = createRealProvider({
+      enabled: true,
+      getAccessToken: async () => 'fake-token',
+      httpClient: mockHttp,
+    });
+    const r = await callProvider(p, req);
+    expect(r.ok).toBe(true);
+    expect(r.output?.kind).toBe('patch_proposal');
+  });
+
+  it('malformed_output_rejected_same_as_fixtures', async () => {
+    const mockHttp: RealProviderHttpClient = async () => ({
+      ok: true, status: 200,
+      json: async () => ({ choices: [{ message: { content: '{"kind":"bad_kind"}' } }], usage: {} }),
+    });
+    const p = createRealProvider({
+      enabled: true, getAccessToken: async () => 'tok', httpClient: mockHttp,
+    });
+    const r = await callProvider(p, req);
+    expect(r.ok).toBe(false);
+  });
+
+  it('ci_runs_never_call_real_provider', async () => {
+    let called = false;
+    const mockHttp: RealProviderHttpClient = async () => { called = true; return { ok: true, status: 200, json: async () => ({}) }; };
+    const p = createRealProvider({ enabled: false, getAccessToken: async () => 'tok', httpClient: mockHttp });
+    const r = await callProvider(p, req);
+    expect(called).toBe(false);
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(' ')).toMatch(/disabled/);
+  });
+
+  it('provider_selection_via_routing_config', () => {
+    const config: RoutingConfig = {
+      agents: {
+        developer: { primary: 'codex', fallbacks: ['deepseek'] },
+        supervisor: { primary: 'scripted', fallbacks: [] },
+      },
+      task_overrides: { patch: { developer: 'deepseek' } },
+    };
+    expect(resolveProviderIdsFromConfig(config, 'developer', 'patch_generation')).toEqual(['codex', 'deepseek']);
+    expect(resolveProviderIdsFromConfig(config, 'supervisor', 'patch_generation')).toEqual(['scripted']);
+  });
+
+  it('non_2xx_response_returns_redacted_error', async () => {
+    const mockHttp: RealProviderHttpClient = async () => ({
+      ok: false, status: 429, json: async () => ({ error: 'access_token=SECRET_VALUE' }),
+    });
+    const p = createRealProvider({ enabled: true, getAccessToken: async () => 'tok', httpClient: mockHttp });
+    const r = await callProvider(p, req);
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(' ')).not.toContain('SECRET_VALUE');
+    expect(r.errors.join(' ')).toMatch(/429|failed/i);
   });
 });
 

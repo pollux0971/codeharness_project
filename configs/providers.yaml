@@ -19,6 +19,7 @@ providers:
   # ---- Codex via ChatGPT subscription (OAuth) — DEFAULT ----
   codex:
     kind: openai_responses_codex
+    gateway_registered: true   # registered in model-gateway when real_api_calls.enabled
     auth:
       mode: oauth
       handle: provider.codex.oauth        # Secret Broker manages the token store
@@ -42,6 +43,7 @@ providers:
   # ---- DeepSeek (api key) — primary third-party fallback ----
   deepseek:
     kind: openai_compatible
+    gateway_registered: true   # registered in model-gateway when real_api_calls.enabled
     auth: { mode: api_key, handle: provider.deepseek.default }
     base_url: https://api.deepseek.com     # OpenAI-compatible; Anthropic-compatible at /anthropic
     api: chat_completions

@@ -1,6 +1,8 @@
 # Per-agent / per-task model routing.
 # DEFAULT: Codex via ChatGPT subscription (OAuth), with third-party APIs as
 # fallback. The gateway tries primary, then fallbacks on error/limit.
+# STORY-011.2: provider IDs in this file are resolved by resolveProviderIdsFromConfig()
+# in model-gateway. The gateway instantiates adapters only when real_api_calls.enabled.
 version: 2
 
 defaults:

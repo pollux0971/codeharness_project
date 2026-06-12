@@ -192,6 +192,77 @@ export async function callFirstValid(registry: ProviderRegistry, providerIds: st
   return { ok: false, provider_id: providerIds.join(','), provider_kind: 'scripted', errors, usage: { inputTokens: 0, outputTokens: 0 } };
 }
 
+export type RealProviderHttpClient = (
+  url: string,
+  init: RequestInit & { headers: Record<string, string> }
+) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>;
+
+export interface RealProviderOptions {
+  id?: string;
+  getAccessToken: () => Promise<string>;
+  endpoint?: string;
+  httpClient?: RealProviderHttpClient;
+  enabled: boolean;
+}
+
+export function createRealProvider(opts: RealProviderOptions): ModelProvider {
+  if (!opts.enabled) {
+    return createDisabledRemoteProvider(opts.id ?? 'llm-remote-disabled');
+  }
+  const endpoint = opts.endpoint ?? 'https://chatgpt.com/backend-api/codex/responses';
+  const httpClient = opts.httpClient ?? (fetch as unknown as RealProviderHttpClient);
+  return {
+    id: opts.id ?? 'llm-remote',
+    kind: 'llm_remote',
+    async call(req: ModelGatewayRequest): Promise<unknown> {
+      const token = await opts.getAccessToken();
+      const res = await httpClient(endpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ messages: [{ role: 'user', content: JSON.stringify(req.task_packet ?? req) }] }),
+      });
+      if (!res.ok) {
+        throw new Error(`real provider call failed: HTTP ${res.status}`);
+      }
+      const data = await res.json() as {
+        choices?: Array<{ message?: { content?: string } }>;
+        usage?: { prompt_tokens?: number; completion_tokens?: number };
+      };
+      const content = data?.choices?.[0]?.message?.content;
+      if (!content) {
+        throw new Error('real provider call failed: missing content in response');
+      }
+      try {
+        return JSON.parse(content);
+      } catch {
+        throw new Error('real provider call failed: response content is not valid JSON');
+      }
+    },
+  };
+}
+
+export interface RoutingConfig {
+  agents: Record<string, { primary: string; fallbacks?: string[] }>;
+  task_overrides?: Record<string, Record<string, string>>;
+}
+
+export function resolveProviderIdsFromConfig(
+  config: RoutingConfig,
+  agent: AgentRole,
+  taskClass: TaskClass
+): string[] {
+  const override = config.task_overrides?.[taskClass]?.[agent];
+  if (override !== undefined) {
+    return [override];
+  }
+  const agentConfig = config.agents[agent];
+  if (!agentConfig) return [];
+  return [agentConfig.primary, ...(agentConfig.fallbacks ?? [])];
+}
+
 export interface BudgetConfig {
   maxCallsPerStory: number;
   maxTokensPerStory: number;
