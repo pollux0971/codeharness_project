@@ -4,6 +4,12 @@
 // Parameters come from configs/context_manager.yaml; load them at runtime.
 
 import type { AgentRole } from '@codeharness/shared';
+import {
+  selectSkillsForRole,
+  sortByDependencyOrder,
+  readSkillContent,
+} from '@codeharness/skill-runtime';
+import type { FullSkillManifest } from '@codeharness/skill-runtime';
 
 export type CompressionStrategy = 'keep_last_n' | 'summarize_node' | 'summarize_chain' | 'aggressive_discard';
 export type TrajectoryPhase = 'search' | 'terminal' | 'stuck';
@@ -238,3 +244,80 @@ export function applySlidingWindow(window: ContextWindow, cfg: ContextManagerCon
 function summarizeTurn(t: Turn, _floor: number): Turn { throw new Error('not implemented: LLM-backed turn summarization'); }
 function mergeAndSummarize(_turns: Turn[], _floor: number): Turn[] { throw new Error('not implemented: chain summarization'); }
 function reorder(_pinned: Turn[], _compressed: Turn[], _total: number, _first: number, _last: number): Turn[] { throw new Error('not implemented'); }
+
+// ── STORY-014.6: role-scoped skill injection ──────────────────────────────────
+
+export interface SkillInjectionOptions {
+  role: AgentRole;
+  manifests: FullSkillManifest[];
+  skillsRoot: string;
+  budgetTokens?: number;
+}
+
+/**
+ * Select registered skills for the role, sort by dependency order, read content,
+ * and inject as ArtifactRef sections into the packet — within the token budget.
+ * Quarantined skills are excluded from loading but their AVOID lines are still injected.
+ */
+export async function injectSkillsIntoPacket(
+  packet: RoleContextPacket,
+  opts: SkillInjectionOptions,
+): Promise<RoleContextPacket> {
+  const budget = opts.budgetTokens ?? DEFAULT_CONFIG.budgets[opts.role];
+
+  // Registered skills for this role, in dependency order
+  const selected = selectSkillsForRole(opts.manifests, opts.role);
+  const ordered = sortByDependencyOrder(selected);
+
+  const skillRefs: ArtifactRef[] = [];
+  const avoidRefs: ArtifactRef[] = [];
+
+  for (const skill of ordered) {
+    const content = readSkillContent(skill, opts.skillsRoot);
+    const tokenCount = content.token_estimate;
+    skillRefs.push({
+      name: `skill_${skill.skill_id}`,
+      ref: skill.skill_id,
+      text: content.skill_md,
+      tokenCount,
+      priority: 3,
+    });
+    if (content.avoid_lines.length > 0) {
+      const avoidText = content.avoid_lines.join('\n');
+      avoidRefs.push({
+        name: `skill_avoid_${skill.skill_id}`,
+        ref: `${skill.skill_id}_avoid`,
+        text: avoidText,
+        tokenCount: Math.ceil(avoidText.length / 4),
+        priority: 1,
+      });
+    }
+  }
+
+  // Quarantined skills: inject their AVOID lines only (as warnings)
+  const quarantined = opts.manifests.filter(
+    m => m.agent_role === opts.role && m.status === 'quarantined',
+  );
+  for (const skill of quarantined) {
+    const content = readSkillContent(skill, opts.skillsRoot);
+    if (content.avoid_lines.length > 0) {
+      const avoidText = content.avoid_lines.join('\n');
+      avoidRefs.push({
+        name: `skill_avoid_${skill.skill_id}`,
+        ref: `${skill.skill_id}_avoid`,
+        text: avoidText,
+        tokenCount: Math.ceil(avoidText.length / 4),
+        priority: 1,
+      });
+    }
+  }
+
+  // Apply token budget to skill sections (avoid refs are priority 1 — always kept)
+  const { kept, deferred } = enforceTokenBudgetByArtifactSelection(skillRefs, budget);
+
+  return {
+    ...packet,
+    sections: [...packet.sections, ...avoidRefs, ...kept],
+    excluded: [...packet.excluded, ...deferred],
+  };
+}

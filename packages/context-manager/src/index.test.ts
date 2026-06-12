@@ -1,9 +1,13 @@
 import { describe, it, expect } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
   buildRoleContextPacket, validateContextPacket, enforceTokenBudgetByArtifactSelection,
-  detectPhase, requiredContextSections, lifecycleToTrajectory,
+  detectPhase, requiredContextSections, lifecycleToTrajectory, injectSkillsIntoPacket,
   ArtifactRef, PhaseSignals, LifecyclePhase,
 } from './index';
+import type { FullSkillManifest } from '@codeharness/skill-runtime';
 
 const dev: ArtifactRef[] = [
   { name: 'story_contract', ref: 'a#1' }, { name: 'relevant_files', ref: 'a#2' },
@@ -196,5 +200,73 @@ describe('context-manager', () => {
     // Same input → same result (deterministic)
     const out2 = enforceTokenBudgetByArtifactSelection(secs, 200);
     expect(out2.kept.map(s => s.name)).toEqual(out.kept.map(s => s.name));
+  });
+});
+
+// ── STORY-014.6: skill injection ──────────────────────────────────────────────
+
+function makeTmpSkillRoot(skills: { id: string; role: string; avoid?: string; md?: string }[]): string {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ctx-sk-'));
+  for (const s of skills) {
+    const dir = path.join(root, 'skills', s.role, s.id);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'SKILL.md'), s.md ?? `# ${s.id}`);
+    fs.writeFileSync(path.join(dir, '.memory.md'), s.avoid ? `AVOID: ${s.avoid}\n` : '');
+    fs.writeFileSync(path.join(dir, 'skill.json'), JSON.stringify({
+      skill_id: `${s.role}.${s.id}`, agent_role: s.role,
+      path: `skills/${s.role}/${s.id}`, tests: ['t.py'],
+    }));
+  }
+  return root;
+}
+
+function makeSkillManifest(id: string, role: string, status: string): FullSkillManifest {
+  return {
+    skill_id: id,
+    agent_role: role as FullSkillManifest['agent_role'],
+    status: status as FullSkillManifest['status'],
+    path: `skills/${role}/${id.split('.')[1] ?? id}`,
+    tests: ['t.py'],
+  };
+}
+
+describe('skill-injection', () => {
+  it('inject_skills_into_packet_adds_sections', async () => {
+    const root = makeTmpSkillRoot([{ id: 'patch-proposal', role: 'developer' }]);
+    try {
+      const manifests = [makeSkillManifest('developer.patch-proposal', 'developer', 'registered')];
+      const packet = { role: 'developer' as const, sections: [], excluded: [] };
+      const result = await injectSkillsIntoPacket(packet, { role: 'developer', manifests, skillsRoot: root });
+      expect(result.sections.some(s => s.name.startsWith('skill_'))).toBe(true);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('inject_respects_token_budget', async () => {
+    const root = makeTmpSkillRoot([{ id: 'patch-proposal', role: 'developer', md: 'A'.repeat(4000) }]);
+    try {
+      const manifests = [makeSkillManifest('developer.patch-proposal', 'developer', 'registered')];
+      const packet = { role: 'developer' as const, sections: [], excluded: [] };
+      const result = await injectSkillsIntoPacket(packet, {
+        role: 'developer', manifests, skillsRoot: root, budgetTokens: 10,
+      });
+      expect(result.excluded.some(n => n.startsWith('skill_'))).toBe(true);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('quarantined_avoid_lines_still_injected', async () => {
+    const root = makeTmpSkillRoot([{ id: 'bad-skill', role: 'developer', avoid: 'never do X' }]);
+    try {
+      const manifests = [makeSkillManifest('developer.bad-skill', 'developer', 'quarantined')];
+      const packet = { role: 'developer' as const, sections: [], excluded: [] };
+      const result = await injectSkillsIntoPacket(packet, { role: 'developer', manifests, skillsRoot: root });
+      expect(result.sections.some(s => s.name.includes('avoid'))).toBe(true);
+      expect(result.sections.some(s => s.name === 'skill_developer.bad-skill')).toBe(false);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 });

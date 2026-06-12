@@ -100,7 +100,11 @@ importers:
 
   packages/container-runtime: {}
 
-  packages/context-manager: {}
+  packages/context-manager:
+    dependencies:
+      '@codeharness/skill-runtime':
+        specifier: workspace:*
+        version: link:../skill-runtime
 
   packages/debugger-runtime: {}
 
