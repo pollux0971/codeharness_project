@@ -5,6 +5,7 @@ import path from 'node:path';
 import {
   buildRoleContextPacket, validateContextPacket, enforceTokenBudgetByArtifactSelection,
   detectPhase, requiredContextSections, lifecycleToTrajectory, injectSkillsIntoPacket,
+  extractProjectProfile, injectProjectProfile,
   ArtifactRef, PhaseSignals, LifecyclePhase,
 } from './index';
 import type { FullSkillManifest } from '@codeharness/skill-runtime';
@@ -200,6 +201,87 @@ describe('context-manager', () => {
     // Same input → same result (deterministic)
     const out2 = enforceTokenBudgetByArtifactSelection(secs, 200);
     expect(out2.kept.map(s => s.name)).toEqual(out.kept.map(s => s.name));
+  });
+});
+
+// ── STORY-015.4: project-profile extraction ───────────────────────────────────
+
+function makeTmpProject(pkg?: object, extraFiles: string[] = []): string {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'prof-'));
+  if (pkg) fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify(pkg));
+  for (const f of extraFiles) fs.writeFileSync(path.join(root, f), '');
+  return root;
+}
+
+describe('project-profile', () => {
+  it('profile_extracted_from_target_repo', () => {
+    const root = makeTmpProject({
+      name: 'my-project',
+      devDependencies: { vitest: '^1', typescript: '^5', '@types/node': '*' },
+    });
+    try {
+      const p = extractProjectProfile(root);
+      expect(p.test_layout.framework).toBe('vitest');
+      expect(p.toolchain.language).toBe('typescript');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('profile_loaded_into_developer_context', () => {
+    const root = makeTmpProject({ name: 'x', devDependencies: {} });
+    try {
+      const profile = extractProjectProfile(root);
+      const packet = { role: 'developer' as const, sections: [], excluded: [] };
+      const updated = injectProjectProfile(packet, profile);
+      expect(updated.sections.some(s => s.name === 'project_conventions')).toBe(true);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('profile_never_contains_secrets', () => {
+    const root = makeTmpProject({ name: 'sk-12345abcdefghij-project', devDependencies: {} });
+    try {
+      const profile = extractProjectProfile(root);
+      expect(profile.summary).not.toContain('sk-12345abcdefghij');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('profile_not_injected_for_supervisor', () => {
+    const root = makeTmpProject();
+    try {
+      const profile = extractProjectProfile(root);
+      const packet = { role: 'supervisor' as const, sections: [], excluded: [] };
+      const updated = injectProjectProfile(packet, profile);
+      expect(updated.sections.some(s => s.name === 'project_conventions')).toBe(false);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('profile_fallbacks_on_missing_package_json', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'empty-'));
+    try {
+      const profile = extractProjectProfile(root);
+      expect(profile.test_layout.framework).toBe('unknown');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('lint_config_files_detected', () => {
+    const root = makeTmpProject({ name: 'x', devDependencies: {} },
+      ['.eslintrc.json', 'prettier.config.js']);
+    try {
+      const profile = extractProjectProfile(root);
+      expect(profile.lint_config_files).toContain('.eslintrc.json');
+      expect(profile.lint_config_files).toContain('prettier.config.js');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 });
 

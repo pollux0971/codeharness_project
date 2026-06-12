@@ -3,6 +3,8 @@
 // re-injection (ReCAP), and state-dependent strategy routing (AgentSwing).
 // Parameters come from configs/context_manager.yaml; load them at runtime.
 
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import type { AgentRole } from '@codeharness/shared';
 import {
   selectSkillsForRole,
@@ -244,6 +246,128 @@ export function applySlidingWindow(window: ContextWindow, cfg: ContextManagerCon
 function summarizeTurn(t: Turn, _floor: number): Turn { throw new Error('not implemented: LLM-backed turn summarization'); }
 function mergeAndSummarize(_turns: Turn[], _floor: number): Turn[] { throw new Error('not implemented: chain summarization'); }
 function reorder(_pinned: Turn[], _compressed: Turn[], _total: number, _first: number, _last: number): Turn[] { throw new Error('not implemented'); }
+
+// ── STORY-015.4: project conventions memory (per-target profile) ──────────────
+
+/** Pattern for redacting secret-looking strings before they enter context. */
+const SECRET_PATTERN = /(sk-[A-Za-z0-9]{8,}|ghp_[A-Za-z0-9]{8,}|AKIA[0-9A-Z]{12,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|\.ssh\/id_rsa|auth\.json)/i;
+
+export interface ProjectProfile {
+  project_root: string;
+  extracted_at: string;
+  naming: {
+    convention: 'camelCase' | 'snake_case' | 'kebab-case' | 'PascalCase' | 'unknown';
+    src_dir: string;
+    test_dir: string;
+  };
+  test_layout: {
+    framework: string;
+    test_pattern: string;
+    co_located: boolean;
+  };
+  toolchain: {
+    language: string;
+    build_tool: string;
+    lint_tool: string;
+    formatter: string;
+  };
+  lint_config_files: string[];
+  summary: string;
+}
+
+/**
+ * Extract project conventions from a target repo directory via static analysis.
+ * Reads only file/directory names and package.json devDependencies — never leaks
+ * file contents and redacts any secret-looking strings before writing the summary.
+ */
+export function extractProjectProfile(projectRoot: string): ProjectProfile {
+  const entries = (() => { try { return fs.readdirSync(projectRoot); } catch { return []; } })();
+
+  const src_dir = ['src', 'lib', 'source'].find(d => entries.includes(d)) ?? 'src';
+  const test_dir = ['test', 'tests', '__tests__', 'spec'].find(d => entries.includes(d)) ?? 'test';
+
+  let pkg: Record<string, unknown> = {};
+  if (entries.includes('package.json')) {
+    try { pkg = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf8')); } catch { /* ignore */ }
+  }
+
+  const devDeps: Record<string, unknown> = (pkg.devDependencies as Record<string, unknown>) ?? {};
+  const deps: Record<string, unknown> = (pkg.dependencies as Record<string, unknown>) ?? {};
+  const allDeps = { ...deps, ...devDeps };
+
+  const framework =
+    'vitest'  in devDeps ? 'vitest' :
+    'jest'    in devDeps ? 'jest'   :
+    'mocha'   in devDeps ? 'mocha'  : 'unknown';
+
+  const build_tool =
+    'vite'    in allDeps ? 'vite'    :
+    'tsc'     in allDeps ? 'tsc'     :
+    'webpack' in allDeps ? 'webpack' :
+    'esbuild' in allDeps ? 'esbuild' :
+    'rollup'  in allDeps ? 'rollup'  : 'unknown';
+
+  const lint_tool =
+    'eslint'  in allDeps ? 'eslint'  :
+    'biome'   in allDeps ? 'biome'   :
+    'tslint'  in allDeps ? 'tslint'  : 'none';
+
+  const formatter =
+    'prettier' in allDeps ? 'prettier' :
+    'biome'    in allDeps ? 'biome'    : 'none';
+
+  const language =
+    ('typescript' in allDeps || '@types/node' in allDeps) ? 'typescript' : 'javascript';
+
+  const test_pattern =
+    framework === 'mocha' ? '**/*.spec.ts' :
+    (framework === 'vitest' || framework === 'jest') ? '**/*.test.ts' : '**/*.test.*';
+
+  const co_located = test_dir === src_dir;
+
+  const lintGlobs = ['.eslintrc', 'eslint.config', 'biome.json', '.prettierrc', 'prettier.config'];
+  const lint_config_files = entries.filter(e => lintGlobs.some(g => e.startsWith(g)));
+
+  const pkgName = typeof pkg.name === 'string' ? pkg.name : '';
+  const convention: ProjectProfile['naming']['convention'] =
+    /[a-z]+-[a-z]/.test(pkgName) ? 'kebab-case' :
+    /[a-z][A-Z]/.test(pkgName)   ? 'camelCase'  :
+    /^[A-Z]/.test(pkgName)       ? 'PascalCase'  :
+    /[a-z]_[a-z]/.test(pkgName)  ? 'snake_case'  : 'unknown';
+
+  const rawSummary = `Project: ${language}, ${framework} tests, ${lint_tool} lint, src=${src_dir}`;
+  const summary = rawSummary.replace(SECRET_PATTERN, '[REDACTED]').slice(0, 200);
+
+  return {
+    project_root: projectRoot,
+    extracted_at: new Date().toISOString(),
+    naming: { convention, src_dir, test_dir },
+    test_layout: { framework, test_pattern, co_located },
+    toolchain: { language, build_tool, lint_tool, formatter },
+    lint_config_files,
+    summary,
+  };
+}
+
+/**
+ * Inject the project profile as a `project_conventions` ArtifactRef into a
+ * developer or debugger context packet. Returns the packet unchanged for all
+ * other roles.
+ */
+export function injectProjectProfile(
+  packet: RoleContextPacket,
+  profile: ProjectProfile,
+): RoleContextPacket {
+  if (packet.role !== 'developer' && packet.role !== 'debugger') return packet;
+  const ref: ArtifactRef = {
+    name: 'project_conventions',
+    ref: 'project_profile',
+    text: profile.summary,
+    tokenCount: Math.ceil(profile.summary.length / 4),
+    priority: 4,
+  };
+  return { ...packet, sections: [...packet.sections, ref] };
+}
 
 // ── STORY-014.6: role-scoped skill injection ──────────────────────────────────
 

@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ProjectProfile",
+  "description": "Extracted conventions from a target repo. Never contains secrets; regenerated at story start.",
+  "type": "object",
+  "required": ["project_root", "extracted_at", "naming", "test_layout", "toolchain"],
+  "properties": {
+    "project_root":  { "type": "string" },
+    "extracted_at":  { "type": "string", "format": "date-time" },
+    "naming": {
+      "type": "object",
+      "properties": {
+        "convention": { "enum": ["camelCase", "snake_case", "kebab-case", "PascalCase", "unknown"] },
+        "src_dir":    { "type": "string" },
+        "test_dir":   { "type": "string" }
+      }
+    },
+    "test_layout": {
+      "type": "object",
+      "properties": {
+        "framework":    { "type": "string" },
+        "test_pattern": { "type": "string" },
+        "co_located":   { "type": "boolean" }
+      }
+    },
+    "toolchain": {
+      "type": "object",
+      "properties": {
+        "language":   { "type": "string" },
+        "build_tool": { "type": "string" },
+        "lint_tool":  { "type": "string" },
+        "formatter":  { "type": "string" }
+      }
+    },
+    "lint_config_files": { "type": "array", "items": { "type": "string" } },
+    "summary": { "type": "string", "description": "≤200 chars; injected into context" }
+  }
+}
