@@ -1,10 +1,15 @@
 import { useEffect, useState } from 'react';
 import { TraceViewer } from './TraceViewer';
 import { ApprovalQueue } from './ApprovalQueue';
+import { ApprovalCenter, type EscalationData } from './ApprovalCenter';
 import { MOCK_TRACE_EVENTS } from './mockTrace';
 
 const API = (import.meta as any).env?.VITE_API ?? 'http://127.0.0.1:8787';
 const TRACE_MODE: 'live' | 'mock' = (import.meta as any).env?.VITE_API ? 'live' : 'mock';
+const MOCK_ESCALATIONS: EscalationData[] = [
+  { id: 'esc-mock-001', type: 'scope_expansion', story_id: 'STORY-000.1', reason: 'Repair requires writing outside allowed write-set', requested_decision: 'Approve scope expansion or reject the repair.' },
+  { id: 'esc-mock-002', type: 'attempt_budget_exceeded', story_id: 'STORY-000.2', reason: 'Developer/Debugger cycle budget exhausted (3/3)', requested_decision: 'Review failure genes and decide whether to retry or abandon.' },
+];
 const ROLE: Record<string, string> = {
   planning_steward: '#8AB4F8', supervisor: '#C792EA', developer: '#5BD6C0',
   debugger: '#F2A65A', shared: '#9FB0BF', harness: '#9FB0BF', validator: '#7EE081',
@@ -91,15 +96,21 @@ export function App() {
           {!d && !err && <Placeholder label="platform" />}
           <Group t="Approval queue (mock)" />
           <ApprovalQueue />
+          <Group t="Approval center" />
+          <ApprovalCenter
+            escalations={d
+              ? d.escalations.map((e: any, i: number): EscalationData => ({
+                  id: `esc-${i}`,
+                  type: e.type,
+                  reason: e.reason,
+                  story_id: e.story_id,
+                  requested_decision: e.requested_decision,
+                }))
+              : MOCK_ESCALATIONS}
+            promotions={[]}
+            onDecide={(id, outcome, reason) => console.log('[approval]', id, outcome, reason)}
+          />
           {d && <>
-            <Group t="Escalations — agent asked, not guessed" />
-            {d.escalations.map((e: any, i: number) => (
-              <div key={i} style={{ background: '#141E2A', border: '1px solid rgba(242,166,90,.28)', borderRadius: 9, padding: 11, marginBottom: 9 }}>
-                <div style={{ ...mono, fontSize: 11, color: '#F2A65A', fontWeight: 600 }}>{e.type}</div>
-                <div style={{ fontSize: 12, color: 'rgba(230,237,243,.56)', margin: '6px 0', lineHeight: 1.5 }}>{e.reason}</div>
-                <div style={{ fontSize: 12, lineHeight: 1.5 }}>{e.requested_decision}</div>
-              </div>
-            ))}
             <Group t="External plugins" />
             {d.plugins.map((p: any) => (
               <div key={p.id} style={{ background: '#18242F', border: '1px solid rgba(230,237,243,.1)', borderRadius: 9, padding: 11 }}>
