@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { TaskGraph, legalTransition, validateFilesWithinScope, runSequentialScheduler } from './index';
+import { TaskGraph, legalTransition, validateFilesWithinScope, runSequentialScheduler, runParallelScheduler } from './index';
+import type { IsolationPool } from './index';
 import type { StoryRecord } from '@codeharness/harness-core';
 
 const scope = { allowedWriteSet: ['codeharness/packages/foo/src/**'] };
@@ -134,5 +135,71 @@ describe('story-scheduler', () => {
     });
     expect(result.outcome).toBe('all_done');
     expect(result.completed).toEqual(['STORY-A', 'STORY-B']);
+  });
+});
+
+// ── Parallel-scheduler tests ──────────────────────────────────────────────────
+
+function makeFakePool(): IsolationPool {
+  return {
+    runBatch: async (stories, runFn) =>
+      Promise.all(stories.map(async s => ({
+        story_id: s.story_id,
+        workspace: { workspace_id: s.story_id, root: '/fake', disposable: true, created_at: '' } as any,
+        result: ((await runFn(s.story_id, {} as any)) ? 'passed' : 'escalated') as 'passed' | 'escalated',
+        checkpoint_sha: null,
+      }))),
+    mergeInOrder: async (runs, _root) =>
+      runs
+        .filter(r => r.result === 'passed')
+        .sort((a, b) => a.story_id.localeCompare(b.story_id))
+        .map(r => r.story_id),
+  };
+}
+
+describe('parallel-scheduler', () => {
+  it('parallel_safe_stories_run_concurrently_and_complete', async () => {
+    const A = makeStory('STORY-A'); A.parallelism_class = 'parallel_safe';
+    const B = makeStory('STORY-B'); B.parallelism_class = 'parallel_safe';
+    const ran: string[] = [];
+    const result = await runParallelScheduler({
+      stories: [A, B],
+      runInnerLoopIsolated: async (s, _ws) => { ran.push(s.story_id); return true; },
+      runInnerLoopSequential: alwaysPass,
+      onCheckpoint: fakeCheckpoint,
+      pool: makeFakePool(),
+      mergeTargetRoot: '/tmp/fake',
+    });
+    expect(result.outcome).toBe('all_done');
+    expect(ran.sort()).toEqual(['STORY-A', 'STORY-B']);
+  });
+
+  it('sequential_story_runs_one_at_a_time', async () => {
+    const A = makeStory('STORY-A'); A.parallelism_class = 'sequential';
+    const B = makeStory('STORY-B', ['STORY-A']); B.parallelism_class = 'sequential';
+    const order: string[] = [];
+    await runParallelScheduler({
+      stories: [A, B],
+      runInnerLoopIsolated: async (_s, _ws) => true,
+      runInnerLoopSequential: async (s) => { order.push(s.story_id); return true; },
+      onCheckpoint: fakeCheckpoint,
+      pool: makeFakePool(),
+      mergeTargetRoot: '/tmp/fake',
+    });
+    expect(order).toEqual(['STORY-A', 'STORY-B']);
+  });
+
+  it('escalation_in_parallel_batch_halts_scheduler', async () => {
+    const A = makeStory('STORY-A'); A.parallelism_class = 'parallel_safe';
+    const B = makeStory('STORY-B'); B.parallelism_class = 'parallel_safe';
+    const result = await runParallelScheduler({
+      stories: [A, B],
+      runInnerLoopIsolated: async (_s, _ws) => false,
+      runInnerLoopSequential: alwaysPass,
+      onCheckpoint: fakeCheckpoint,
+      pool: makeFakePool(),
+      mergeTargetRoot: '/tmp/fake',
+    });
+    expect(result.outcome).toBe('escalated');
   });
 });

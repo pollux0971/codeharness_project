@@ -5,7 +5,7 @@ import path from 'node:path';
 import {
   isPathInsideRoot, resolveInsideWorkspace, WorkspaceRegistry, detectSymlinkEscape,
   makeOracle, createDisposableWorkspace, applyPatch, collectDiff, cleanupWorkspace, seedFile, commitAll,
-  bootstrapGreenfieldWorkspace,
+  bootstrapGreenfieldWorkspace, WorkspaceIsolationPool,
   type GreenfieldWorkspaceInput,
 } from './index';
 
@@ -183,6 +183,68 @@ describe('workspace-manager', () => {
       // No scheduler fields in return; generated project code is not executed
       expect((result as Record<string, unknown>).scheduled_stories).toBeUndefined();
       expect((result as Record<string, unknown>).execution_result).toBeUndefined();
+    });
+  });
+
+  // ---- STORY-010.4: WorkspaceIsolationPool ----
+  describe('workspace-isolation-pool', () => {
+    it('workspaces_isolated_no_cross_writes', async () => {
+      const reg = new WorkspaceRegistry();
+      const pool = new WorkspaceIsolationPool(reg);
+      const written: Record<string, string[]> = {};
+      const runs = await pool.runBatch(
+        [{ story_id: 'STORY-A' }, { story_id: 'STORY-B' }],
+        async (sid, ws) => {
+          seedFile(ws, `${sid}.txt`, `content-${sid}`);
+          commitAll(ws, `work-${sid}`);
+          written[sid] = [ws.root];
+          return true;
+        },
+      );
+      expect(written['STORY-A'][0]).not.toBe(written['STORY-B'][0]);
+      expect(require('node:fs').existsSync(
+        require('node:path').join(written['STORY-A'][0], 'STORY-B.txt'),
+      )).toBe(false);
+      for (const r of runs) cleanupWorkspace(reg, r.workspace);
+    });
+
+    it('merge_order_deterministic', async () => {
+      const reg = new WorkspaceRegistry();
+      const pool = new WorkspaceIsolationPool(reg);
+      const runs = await pool.runBatch(
+        [{ story_id: 'STORY-B' }, { story_id: 'STORY-A' }],
+        async (_sid, _ws) => true,
+      );
+      const target = require('node:fs').mkdtempSync(
+        require('node:path').join(require('node:os').tmpdir(), 'merge-target-'),
+      );
+      require('node:child_process').execFileSync('git', ['init', '-q'], { cwd: target });
+      require('node:child_process').execFileSync('git', ['config', 'user.email', 'test@test'], { cwd: target });
+      require('node:child_process').execFileSync('git', ['config', 'user.name', 'test'], { cwd: target });
+      require('node:child_process').execFileSync('git', ['commit', '--allow-empty', '-q', '-m', 'init'], { cwd: target });
+      const merged = await pool.mergeInOrder(runs, target);
+      expect(merged).toEqual(['STORY-A', 'STORY-B']);
+      require('node:fs').rmSync(target, { recursive: true, force: true });
+      for (const r of runs) cleanupWorkspace(reg, r.workspace);
+    });
+
+    it('parallel_safe_stories_run_concurrently', async () => {
+      const reg = new WorkspaceRegistry();
+      const pool = new WorkspaceIsolationPool(reg);
+      const startTimes: number[] = [];
+      const runs = await pool.runBatch(
+        [{ story_id: 'STORY-A' }, { story_id: 'STORY-B' }, { story_id: 'STORY-C' }],
+        async (_sid, _ws) => {
+          startTimes.push(Date.now());
+          await new Promise(r => setTimeout(r, 100));
+          return true;
+        },
+      );
+      // All three inner loops must have started before any could finish (100ms delay).
+      // The spread between first and last start time must be < 100ms.
+      const spread = Math.max(...startTimes) - Math.min(...startTimes);
+      expect(spread).toBeLessThan(100);
+      for (const r of runs) cleanupWorkspace(reg, r.workspace);
     });
   });
 

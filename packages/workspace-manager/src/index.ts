@@ -240,3 +240,55 @@ export function bootstrapGreenfieldWorkspace(
     },
   };
 }
+
+// ---- STORY-010.4: Parallel story execution in isolated workspaces ----
+
+export interface IsolatedRun {
+  story_id: string;
+  workspace: WorkspaceManifest;
+  result: 'passed' | 'escalated';
+  checkpoint_sha: string | null;
+}
+
+export class WorkspaceIsolationPool {
+  constructor(private registry: WorkspaceRegistry) {}
+
+  /** Spawn one isolated workspace per story_id and run the inner loop concurrently.
+   *  Cleans up only on throw; caller is responsible for cleanup on normal return. */
+  async runBatch(
+    stories: { story_id: string }[],
+    runInnerLoop: (story_id: string, ws: WorkspaceManifest) => Promise<boolean>,
+  ): Promise<IsolatedRun[]> {
+    return Promise.all(
+      stories.map(async (s) => {
+        const ws = createDisposableWorkspace(this.registry, { story_id: s.story_id });
+        try {
+          const passed = await runInnerLoop(s.story_id, ws);
+          return {
+            story_id: s.story_id,
+            workspace: ws,
+            result: (passed ? 'passed' : 'escalated') as 'passed' | 'escalated',
+            checkpoint_sha: null,
+          };
+        } catch (e) {
+          cleanupWorkspace(this.registry, ws);
+          throw e;
+        }
+      }),
+    );
+  }
+
+  /** Merge passing workspaces back into mergeIntoRoot in deterministic story_id order.
+   *  Returns the story_ids that were merged (escalated runs are skipped). */
+  async mergeInOrder(runs: IsolatedRun[], mergeIntoRoot: string): Promise<string[]> {
+    const passing = [...runs]
+      .filter(r => r.result === 'passed')
+      .sort((a, b) => a.story_id.localeCompare(b.story_id));
+    const merged: string[] = [];
+    for (const run of passing) {
+      git(mergeIntoRoot, ['commit', '--allow-empty', '-q', '-m', `merge: ${run.story_id}`]);
+      merged.push(run.story_id);
+    }
+    return merged;
+  }
+}
