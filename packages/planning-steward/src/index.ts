@@ -546,3 +546,106 @@ export function sanitizeDefectText(text: string): string {
     .replace(/SYSTEM:|USER:|ASSISTANT:|<\|im_start\|>/gi, '')
     .replace(/[<>&]/g, '');
 }
+
+// ── STORY-019.2: Defect triage — classify, reproduce, emit repair story ────────
+
+export type DefectClass = 'regression' | 'environment' | 'user_error' | 'unknown';
+
+const SHA_RE = /^[0-9a-f]{7,}$/i;
+
+export function classifyDefect(report: DefectReport): DefectClass {
+  const version = (report.artifact_version ?? '').trim();
+  const broke = (report.what_broke ?? '').toLowerCase();
+  const expected = (report.expected_behaviour ?? '').toLowerCase();
+
+  if (/environment|config|env var/i.test(broke)) return 'environment';
+  if (/documentation|misunderstood/i.test(broke) || /documentation|misunderstood/i.test(expected)) return 'user_error';
+  if (SHA_RE.test(version)) return 'regression';
+  return 'unknown';
+}
+
+export type ReproductionStatus = 'confirmed' | 'non_reproducible' | 'error';
+
+export interface ReproductionResult {
+  status: ReproductionStatus;
+  output: string;
+  run_at: string;
+}
+
+export interface TestRunner {
+  run(command: string): Promise<{ ok: boolean; output: string }>;
+}
+
+export async function attemptReproduction(
+  _report: DefectReport,
+  command: string,
+  runner: TestRunner,
+): Promise<ReproductionResult> {
+  const run_at = new Date().toISOString();
+  try {
+    const result = await runner.run(command);
+    return {
+      status: result.ok ? 'non_reproducible' : 'confirmed',
+      output: result.output,
+      run_at,
+    };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { status: 'error', output: msg, run_at };
+  }
+}
+
+export interface RepairStoryOptions {
+  report: DefectReport;
+  defectClass: DefectClass;
+  reproduction: ReproductionResult;
+  impactedFiles?: string[];
+}
+
+export function buildRepairStory(opts: RepairStoryOptions): StoryNode {
+  if (opts.reproduction.status === 'non_reproducible') {
+    throw new Error('repair_story_blocked: defect is non_reproducible');
+  }
+  const writeSet = opts.impactedFiles && opts.impactedFiles.length > 0
+    ? [...new Set(opts.impactedFiles)].sort()
+    : ['src/**'];
+  return {
+    story_id: 'STORY-REPAIR-' + opts.report.report_id,
+    depends_on: [],
+    parallelism_class: 'sequential',
+    allowed_write_set: writeSet,
+  };
+}
+
+export interface DefectTriageResult {
+  report: DefectReport;
+  defect_class: DefectClass;
+  reproduction: ReproductionResult;
+  repair_story: StoryNode | null;
+  triage_blocked: boolean;
+  triage_blocked_reason?: string;
+}
+
+export async function triageDefect(
+  report: DefectReport,
+  command: string,
+  runner: TestRunner,
+  impactedFiles?: string[],
+): Promise<DefectTriageResult> {
+  const defect_class = classifyDefect(report);
+  const reproduction = await attemptReproduction(report, command, runner);
+
+  if (reproduction.status === 'non_reproducible') {
+    return {
+      report,
+      defect_class,
+      reproduction,
+      repair_story: null,
+      triage_blocked: true,
+      triage_blocked_reason: 'non_reproducible',
+    };
+  }
+
+  const repair_story = buildRepairStory({ report, defectClass: defect_class, reproduction, impactedFiles });
+  return { report, defect_class, reproduction, repair_story, triage_blocked: false };
+}

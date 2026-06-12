@@ -4,6 +4,8 @@ import {
   createPlanningBundle, requiredPlanningFiles, StoryNode, IdeaInput,
   generateBacklogFromPlanningBundle, buildStoryGraph, PlanningBundle,
   validateDefectReport, sanitizeDefectText, detectPromptInjection,
+  classifyDefect, attemptReproduction, buildRepairStory, triageDefect,
+  type DefectReport, type TestRunner,
 } from './index';
 
 describe('planning-steward (existing)', () => {
@@ -576,6 +578,69 @@ describe('injection-defense', () => {
       const r = detectPromptInjection(text);
       expect(r.detected).toBe(true);
     });
+  });
+});
+
+// ── STORY-019.2: Defect triage ────────────────────────────────────────────────
+
+const baseReport: DefectReport = {
+  report_id: 'r-001',
+  title: 'Calc broken',
+  what_broke: 'division returns NaN',
+  expected_behaviour: 'Returns 4',
+  actual_behaviour: 'Returns NaN',
+  artifact_version: 'abc1234def56',
+  reported_at: '2026-01-01T00:00:00Z',
+};
+const failRunner: TestRunner = { run: async () => ({ ok: false, output: 'test failed' }) };
+const passRunner: TestRunner = { run: async () => ({ ok: true,  output: 'all pass' }) };
+
+describe('defect-triage', () => {
+  it('defect_classified_and_reproduced_or_flagged', async () => {
+    const r = await triageDefect(baseReport, 'pnpm test', failRunner);
+    expect(r.defect_class).toBe('regression');
+    expect(r.reproduction.status).toBe('confirmed');
+    expect(r.triage_blocked).toBe(false);
+  });
+
+  it('non_reproducible_defect_flagged', async () => {
+    const r = await triageDefect(baseReport, 'pnpm test', passRunner);
+    expect(r.triage_blocked).toBe(true);
+    expect(r.repair_story).toBeNull();
+  });
+
+  it('repair_story_passes_bundle_gate', async () => {
+    const r = await triageDefect(baseReport, 'pnpm test', failRunner);
+    expect(r.repair_story).not.toBeNull();
+    expect(r.repair_story!.story_id).toMatch(/STORY-REPAIR/);
+    expect(r.repair_story!.allowed_write_set.length).toBeGreaterThan(0);
+    expect(r.repair_story!.parallelism_class).toBe('sequential');
+  });
+
+  it('repair_story_scoped_to_minimal_write_set', async () => {
+    const r = await triageDefect(baseReport, 'pnpm test', failRunner, ['src/calc.ts']);
+    expect(r.repair_story!.allowed_write_set).toEqual(['src/calc.ts']);
+  });
+
+  it('fallback_write_set_when_no_impact_data', async () => {
+    const r = await triageDefect(baseReport, 'pnpm test', failRunner);
+    expect(r.repair_story!.allowed_write_set).toEqual(['src/**']);
+  });
+
+  it('classify_defect_regression', () => {
+    expect(classifyDefect(baseReport)).toBe('regression');
+  });
+
+  it('classify_defect_environment', () => {
+    const r = { ...baseReport, what_broke: 'env var DATABASE_URL not set', artifact_version: 'v1.0.0' };
+    expect(classifyDefect(r)).toBe('environment');
+  });
+
+  it('reproduction_error_handled', async () => {
+    const errorRunner: TestRunner = { run: async () => { throw new Error('runner crashed'); } };
+    const r = await attemptReproduction(baseReport, 'pnpm test', errorRunner);
+    expect(r.status).toBe('error');
+    expect(r.output).toMatch(/crashed/);
   });
 });
 
