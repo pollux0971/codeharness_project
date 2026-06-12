@@ -10,17 +10,24 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import { unlinkSync } from 'fs';
 import {
   canTransition,
   tick,
   selectNextStory,
   enforceAttemptBudget,
   enforceRunBudget,
+  loadOrInitProjectRunState,
+  persistProjectRunState,
   type HarnessState,
   type StoryRecord,
   type RunBudget,
   type TickInput,
 } from './index.js';
+
+const tmpPath = () => join(tmpdir(), `prs_test_${Date.now()}_${Math.floor(Math.random() * 1e6)}.json`);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -409,5 +416,62 @@ describe('STORY-002.1 budget enforcement', () => {
 
   it('enforceRunBudget returns stop when over budget', () => {
     expect(enforceRunBudget(makeRunBudget(15, 10))).toBe('stop');
+  });
+});
+
+// ── project-run-state (STORY-010.3) ───────────────────────────────────────────
+
+describe('project-run-state', () => {
+  it('run_state_persisted_per_target_project', async () => {
+    const p = tmpPath();
+    const state = loadOrInitProjectRunState(p, 'proj-A', ['STORY-A', 'STORY-B'], 10);
+    state.stories.find(s => s.story_id === 'STORY-A')!.status = 'done';
+    await persistProjectRunState(p, state);
+
+    const reloaded = loadOrInitProjectRunState(p, 'proj-A', ['STORY-A', 'STORY-B'], 10);
+    expect(reloaded.stories.find(s => s.story_id === 'STORY-A')?.status).toBe('done');
+    unlinkSync(p);
+  });
+
+  it('resume_continues_from_last_checkpoint', async () => {
+    const p = tmpPath();
+    const state = loadOrInitProjectRunState(p, 'proj-B', ['STORY-A','STORY-B','STORY-C'], 10);
+    state.current_story = 'STORY-B';
+    state.iterations_used = 1;
+    state.stories.find(s => s.story_id === 'STORY-A')!.status = 'done';
+    state.stories.find(s => s.story_id === 'STORY-A')!.checkpoint_sha = 'abc123';
+    state.stories.find(s => s.story_id === 'STORY-B')!.status = 'in_progress';
+    await persistProjectRunState(p, state);
+
+    const resumed = loadOrInitProjectRunState(p, 'proj-B', ['STORY-A','STORY-B','STORY-C'], 10);
+    expect(resumed.current_story).toBe('STORY-B');
+    expect(resumed.iterations_used).toBe(1);
+    expect(resumed.stories.find(s => s.story_id === 'STORY-A')?.status).toBe('done');
+    expect(resumed.stories.find(s => s.story_id === 'STORY-C')?.status).toBe('todo');
+    unlinkSync(p);
+  });
+
+  it('no_done_recorded_without_validator_evidence', () => {
+    const state = loadOrInitProjectRunState('/nonexistent/fresh.json', 'proj-C', ['STORY-X'], 10);
+    expect(state.stories.every(s => s.status === 'todo')).toBe(true);
+  });
+
+  it('fresh_init_when_file_missing', () => {
+    const state = loadOrInitProjectRunState('/nonexistent/path.json', 'proj-D', ['STORY-Z'], 5);
+    expect(state.project_id).toBe('proj-D');
+    expect(state.stories.length).toBe(1);
+    expect(state.stories[0].status).toBe('todo');
+    expect(state.iterations_used).toBe(0);
+  });
+
+  it('persist_sets_updated_at', async () => {
+    const p = tmpPath();
+    const state = loadOrInitProjectRunState(p, 'proj-E', [], 5);
+    const before = state.updated_at;
+    await new Promise(r => setTimeout(r, 5));
+    await persistProjectRunState(p, state);
+    const after = JSON.parse(require('fs').readFileSync(p, 'utf8')).updated_at;
+    expect(after >= before).toBe(true);
+    unlinkSync(p);
   });
 });

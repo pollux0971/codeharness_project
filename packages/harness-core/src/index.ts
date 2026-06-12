@@ -222,6 +222,81 @@ export async function rollbackWorkspace(_story: StoryRecord): Promise<void> {
   throw new Error('not implemented: git checkout to pre-story branch, clean workspace');
 }
 
+// ── Project-level run state (per-target-project resume) ──────────────────────
+
+export interface ProjectStoryEntry {
+  story_id: string;
+  status: StoryStatus;
+  attempts: number;
+  attempt_budget: number;
+  checkpoint_sha: string | null;
+  last_action: string | null;
+  last_result: string | null;
+  blocked_reason: string | null;
+}
+
+export interface ProjectRunState {
+  schema_version: number;
+  project_id: string;
+  run_id: string;
+  created_at: string;
+  updated_at: string;
+  current_story: string | null;
+  last_decision: string | null;
+  iterations_used: number;
+  run_iteration_budget: number;
+  stories: ProjectStoryEntry[];
+}
+
+export function loadOrInitProjectRunState(
+  filePath: string,
+  projectId: string,
+  storyIds: string[],
+  runIterationBudget: number
+): ProjectRunState {
+  const { readFileSync, existsSync } = require('fs') as typeof import('fs');
+  if (existsSync(filePath)) {
+    const parsed = JSON.parse(readFileSync(filePath, 'utf8')) as ProjectRunState;
+    if (parsed.schema_version !== 1) {
+      throw new Error(`ProjectRunState schema_version must be 1, got ${parsed.schema_version}`);
+    }
+    return parsed;
+  }
+  const now = new Date().toISOString();
+  return {
+    schema_version: 1,
+    project_id: projectId,
+    run_id: now,
+    created_at: now,
+    updated_at: now,
+    current_story: null,
+    last_decision: null,
+    iterations_used: 0,
+    run_iteration_budget: runIterationBudget,
+    stories: storyIds.map(id => ({
+      story_id: id,
+      status: 'todo',
+      attempts: 0,
+      attempt_budget: 3,
+      checkpoint_sha: null,
+      last_action: null,
+      last_result: null,
+      blocked_reason: null,
+    })),
+  };
+}
+
+export async function persistProjectRunState(
+  filePath: string,
+  state: ProjectRunState
+): Promise<void> {
+  const { writeFileSync, renameSync } = await import('fs');
+  state.updated_at = new Date().toISOString();
+  const tmp = filePath + '.tmp';
+  writeFileSync(tmp, JSON.stringify(state, null, 2), 'utf8');
+  renameSync(tmp, filePath);
+}
+
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
 /** Minimal glob matcher (supports ** and * wildcards). */
