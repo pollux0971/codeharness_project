@@ -244,6 +244,59 @@ export function createRealProvider(opts: RealProviderOptions): ModelProvider {
   };
 }
 
+export interface ModelRef {
+  provider_id: string;
+  model_name: string;
+}
+
+export interface ModelRegistryConfig {
+  providers: Record<string, {
+    kind: string;
+    models: { name: string; tier: string }[];
+    gateway_registered?: boolean;
+  }>;
+  agents: Record<string, {
+    primary: string;
+    fallbacks?: string[];
+  }>;
+}
+
+export function parseModelRef(ref: string): ModelRef | null {
+  const idx = ref.indexOf('/');
+  if (idx === -1 || idx !== ref.lastIndexOf('/')) return null;
+  return { provider_id: ref.slice(0, idx), model_name: ref.slice(idx + 1) };
+}
+
+export function validateModelRegistry(cfg: ModelRegistryConfig): ValidationResult {
+  const errors: string[] = [];
+  for (const [agentName, agentCfg] of Object.entries(cfg.agents)) {
+    const refs = [agentCfg.primary, ...(agentCfg.fallbacks ?? [])];
+    const seen = new Set<string>();
+    for (const ref of refs) {
+      const parsed = parseModelRef(ref);
+      if (!parsed) {
+        errors.push(`invalid ref format: ${ref}`);
+        continue;
+      }
+      const provider = cfg.providers[parsed.provider_id];
+      if (!provider) {
+        errors.push(`unknown provider: ${parsed.provider_id} (in ref ${ref})`);
+      } else {
+        const modelNames = provider.models.map(m => m.name);
+        if (!modelNames.includes(parsed.model_name)) {
+          errors.push(`unknown model: ${ref}`);
+        }
+      }
+      if (seen.has(ref)) {
+        errors.push(`cycle in fallback chain for agent ${agentName}: ${ref}`);
+      } else {
+        seen.add(ref);
+      }
+    }
+  }
+  return { ok: errors.length === 0, errors };
+}
+
 export interface RoutingConfig {
   agents: Record<string, { primary: string; fallbacks?: string[] }>;
   task_overrides?: Record<string, Record<string, string>>;

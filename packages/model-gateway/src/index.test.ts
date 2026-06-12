@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { parse as parseYaml } from 'yaml';
 import {
   BudgetGuard,
   RunBudgetPool,
@@ -17,9 +18,12 @@ import {
   ProviderRegistry,
   resolveProviderIdsFromConfig,
   validateStructuredOutput,
+  validateModelRegistry,
+  parseModelRef,
   type DeveloperOutput,
   type RealProviderHttpClient,
   type RoutingConfig,
+  type ModelRegistryConfig,
 } from './index';
 
 const goodDeveloperOutput: DeveloperOutput = {
@@ -280,5 +284,70 @@ describe('gate', () => {
     const r = await callProvider(p, req);
     expect(r.ok).toBe(false);
     expect(r.errors.join(' ')).toMatch(/disabled/);
+  });
+});
+
+const validCfg: ModelRegistryConfig = {
+  providers: {
+    codex:    { kind: 'openai_responses_codex', models: [{ name: 'gpt-5.5-codex', tier: 'strong' }] },
+    deepseek: { kind: 'openai_compatible',      models: [
+      { name: 'deepseek-v4-pro',   tier: 'strong' },
+      { name: 'deepseek-v4-flash', tier: 'cheap' },
+    ]},
+  },
+  agents: {
+    developer: { primary: 'codex/gpt-5.5-codex', fallbacks: ['deepseek/deepseek-v4-pro'] },
+  },
+};
+
+describe('model-registry', () => {
+  it('routing_references_resolve_to_providers', () => {
+    expect(validateModelRegistry(validCfg).ok).toBe(true);
+  });
+
+  it('unknown_provider_fails_boot', () => {
+    const bad: ModelRegistryConfig = {
+      ...validCfg,
+      agents: { developer: { primary: 'nonexistent/gpt-5.5-codex' } },
+    };
+    const r = validateModelRegistry(bad);
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(' ')).toMatch(/nonexistent/);
+  });
+
+  it('unknown_model_fails_boot', () => {
+    const bad: ModelRegistryConfig = {
+      ...validCfg,
+      agents: { developer: { primary: 'codex/bad-model-name' } },
+    };
+    const r = validateModelRegistry(bad);
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(' ')).toMatch(/bad-model-name/);
+  });
+
+  it('fallback_chains_acyclic', () => {
+    const cyclic: ModelRegistryConfig = {
+      ...validCfg,
+      agents: { developer: { primary: 'codex/gpt-5.5-codex', fallbacks: ['codex/gpt-5.5-codex'] } },
+    };
+    const r = validateModelRegistry(cyclic);
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(' ')).toMatch(/cycle/i);
+  });
+
+  it('invalid_registry_fails_boot', () => {
+    expect(parseModelRef('codexmodel')).toBeNull();
+    expect(parseModelRef('codex/gpt-5.5-codex')).toEqual({ provider_id: 'codex', model_name: 'gpt-5.5-codex' });
+  });
+
+  it('real_providers_yaml_passes_validation', () => {
+    const providers = parseYaml(fs.readFileSync('configs/providers.yaml', 'utf8'));
+    const routing   = parseYaml(fs.readFileSync('configs/model_routing.yaml', 'utf8'));
+    const cfg: ModelRegistryConfig = {
+      providers: providers.providers,
+      agents: routing.agents,
+    };
+    const r = validateModelRegistry(cfg);
+    expect(r.ok).toBe(true);
   });
 });

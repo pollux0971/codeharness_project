@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ModelRegistry",
+  "description": "Validates providers.yaml and model_routing.yaml at boot. All routing refs must resolve to declared providers and models.",
+  "type": "object",
+  "required": ["providers_version", "routing_version", "providers", "agents"],
+  "properties": {
+    "providers_version": { "type": "integer", "minimum": 1 },
+    "routing_version":   { "type": "integer", "minimum": 1 },
+    "providers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["kind", "models"],
+        "properties": {
+          "kind":     { "type": "string" },
+          "models":   {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name", "tier"],
+              "properties": {
+                "name": { "type": "string" },
+                "tier": { "enum": ["strong", "mid", "cheap"] }
+              }
+            }
+          },
+          "gateway_registered": { "type": "boolean" }
+        }
+      }
+    },
+    "agents": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["primary"],
+        "properties": {
+          "primary":   { "type": "string", "pattern": "^[a-z0-9_]+/[a-z0-9_.\\-]+$" },
+          "fallbacks": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  }
+}
