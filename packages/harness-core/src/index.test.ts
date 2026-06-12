@@ -23,6 +23,8 @@ import {
   persistProjectRunState,
   buildReviewSummary,
   recordReviewDecision,
+  flagTestAuthorship,
+  recordTestIntegrity,
   type HarnessState,
   type StoryRecord,
   type RunBudget,
@@ -497,6 +499,7 @@ function makeCheckpointedRunState(): ProjectRunState {
 }
 
 const tmpTrace = () => join(tmpdir(), `review-trace-${Date.now()}-${Math.floor(Math.random() * 1e6)}.jsonl`);
+const tmpIntegrityTrace = () => join(tmpdir(), `integrity-trace-${Date.now()}-${Math.floor(Math.random() * 1e6)}.jsonl`);
 
 describe('review-cli-domain', () => {
   it('approve_required_before_promotion', () => {
@@ -560,5 +563,53 @@ describe('review-cli-domain', () => {
     expect(events.length).toBe(1);
     expect(events[0].type).toBe('human_review');
     if (existsSync(trace)) unlinkSync(trace);
+  });
+});
+
+// ── test-integrity (STORY-015.3) ──────────────────────────────────────────────
+
+describe('test-integrity', () => {
+  it('implementer_authored_tests_flagged', () => {
+    const a = flagTestAuthorship('S-1', ['test/a.test.ts'], 'developer');
+    expect(a.implementer_only).toBe(true);
+    expect(a.requires_human_confirmation).toBe(true);
+    expect(a.authored_by).toBe('developer');
+  });
+
+  it('supervisor_authored_not_flagged', () => {
+    const a = flagTestAuthorship('S-1', [], 'supervisor');
+    expect(a.implementer_only).toBe(false);
+    expect(a.requires_human_confirmation).toBe(false);
+  });
+
+  it('debugger_authored_flagged', () => {
+    const a = flagTestAuthorship('S-1', [], 'debugger');
+    expect(a.implementer_only).toBe(true);
+  });
+
+  it('non_implementer_author_path_available', () => {
+    const trace = tmpIntegrityTrace();
+    const authorship = flagTestAuthorship('S-1', ['test/a.test.ts'], 'developer');
+    const record = recordTestIntegrity(authorship, 'human', trace);
+    expect(record.confirmed_by).toBe('human');
+    expect(record.story_id).toBe('S-1');
+    if (existsSync(trace)) unlinkSync(trace);
+  });
+
+  it('human_confirmation_recorded_at_checkpoint', () => {
+    const trace = tmpIntegrityTrace();
+    const authorship = flagTestAuthorship('S-2', [], 'developer');
+    recordTestIntegrity(authorship, 'supervisor_second_pass', trace);
+    const events = readJsonl(trace);
+    expect(events.length).toBe(1);
+    expect(events[0].type).toBe('test_integrity');
+    if (existsSync(trace)) unlinkSync(trace);
+  });
+
+  it('confirm_non_flagged_authorship_throws', () => {
+    const trace = tmpIntegrityTrace();
+    const authorship = flagTestAuthorship('S-3', [], 'supervisor');
+    expect(() => recordTestIntegrity(authorship, 'human', trace))
+      .toThrow(/confirmation requires/);
   });
 });

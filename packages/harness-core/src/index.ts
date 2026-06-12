@@ -199,11 +199,78 @@ export function tick(input: TickInput): OrchestratorAction {
 
 // ── Checkpoint + rollback primitives (stubs) ──────────────────────────────────
 
+// ── Test authorship / integrity (STORY-015.3) ─────────────────────────────────
+
+export type TestAuthorRole = 'developer' | 'debugger' | 'supervisor' | 'human' | 'unknown';
+
+export interface TestAuthorshipRecord {
+  story_id: string;
+  test_files: string[];
+  authored_by: TestAuthorRole;
+  /** True when the implementer (developer/debugger) is the sole test author. */
+  implementer_only: boolean;
+  /** If implementer_only, a human or supervisor must confirm before CHECKPOINT. */
+  requires_human_confirmation: boolean;
+  recorded_at: string;
+}
+
+export interface TestIntegrityRecord {
+  story_id: string;
+  authorship: TestAuthorshipRecord;
+  confirmed_by: 'human' | 'supervisor_second_pass';
+  confirmed_at: string;
+  trace_event_id: string;
+}
+
+export function flagTestAuthorship(
+  storyId: string,
+  testFiles: string[],
+  implementerRole: TestAuthorRole
+): TestAuthorshipRecord {
+  const implementer_only = implementerRole === 'developer' || implementerRole === 'debugger';
+  return {
+    story_id: storyId,
+    test_files: testFiles,
+    authored_by: implementerRole,
+    implementer_only,
+    requires_human_confirmation: implementer_only,
+    recorded_at: new Date().toISOString(),
+  };
+}
+
+export function recordTestIntegrity(
+  authorship: TestAuthorshipRecord,
+  confirmedBy: 'human' | 'supervisor_second_pass',
+  traceLogPath: string
+): TestIntegrityRecord {
+  if (!authorship.requires_human_confirmation) {
+    throw new Error('test integrity confirmation requires human or supervisor_second_pass');
+  }
+  const existing = readJsonl(traceLogPath);
+  const last = existing[existing.length - 1];
+  const traceEvent = createTraceEvent({
+    run_id: authorship.story_id,
+    seq: last ? last.seq + 1 : 0,
+    previous_event_hash: last ? (last.hash ?? null) : null,
+    type: 'test_integrity',
+    payload: { story_id: authorship.story_id, confirmed_by: confirmedBy, authored_by: authorship.authored_by },
+  });
+  appendJsonl(traceLogPath, traceEvent);
+  return {
+    story_id: authorship.story_id,
+    authorship,
+    confirmed_by: confirmedBy,
+    confirmed_at: new Date().toISOString(),
+    trace_event_id: traceEvent.event_id,
+  };
+}
+
 export interface CheckpointRecord {
   story_id: string;
   branch: string;
   commit_sha: string;
   checkpointed_at: string;
+  test_integrity?: TestIntegrityRecord;   // present when tests required confirmation
 }
 
 export async function writeCheckpoint(story: StoryRecord): Promise<CheckpointRecord> {
