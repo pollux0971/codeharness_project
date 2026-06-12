@@ -461,6 +461,53 @@ export async function guardedCall(
   return result;
 }
 
+// ── Model onboarding gate (STORY-018.3) ──────────────────────────────────
+
+export type ModelStatus = 'candidate' | 'active' | 'deprecated' | 'blocked';
+
+export interface ModelEvalRecord {
+  provider_ref: string;
+  eval_run_id: string;
+  stories_run: number;
+  stories_passed: number;
+  threshold: number;
+  pass_rate: number;
+  passed: boolean;
+  status_after: ModelStatus;
+  evaluated_at: string;
+  fixture_names: string[];
+}
+
+export interface ModelEvalOptions {
+  providerRef: string;
+  createProvider: () => ModelProvider;
+  fixtureStoryIds?: string[];
+  threshold?: number;
+  runFixtureStory: (storyId: string, provider: ModelProvider) => Promise<boolean>;
+}
+
+export async function runModelEval(opts: ModelEvalOptions): Promise<ModelEvalRecord> {
+  const stories = opts.fixtureStoryIds ?? ['STORY-E2E-001', 'STORY-E2E-002', 'STORY-E2E-003'];
+  const threshold = opts.threshold ?? 1.0;
+  const provider = opts.createProvider();
+  const results = await Promise.all(stories.map(id => opts.runFixtureStory(id, provider)));
+  const storiesPassed = results.filter(Boolean).length;
+  const passRate = stories.length > 0 ? storiesPassed / stories.length : 0;
+  const passed = passRate >= threshold;
+  return {
+    provider_ref: opts.providerRef,
+    eval_run_id: `eval-${opts.providerRef.replace('/', '-')}-${stories.length}`,
+    stories_run: stories.length,
+    stories_passed: storiesPassed,
+    threshold,
+    pass_rate: passRate,
+    passed,
+    status_after: passed ? 'active' : 'candidate',
+    evaluated_at: new Date().toISOString(),
+    fixture_names: stories,
+  };
+}
+
 // ── Dynamic model-tier ladder (STORY-018.2) ───────────────────────────────
 
 export type ModelTier = 'cheap' | 'mid' | 'strong';
