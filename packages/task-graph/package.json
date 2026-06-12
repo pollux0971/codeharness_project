@@ -6,6 +6,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@codeharness/harness-core": "workspace:*"
+    "@codeharness/harness-core": "workspace:*",
+    "@codeharness/event-log": "workspace:*"
   }
 }

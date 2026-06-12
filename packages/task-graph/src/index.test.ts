@@ -1,7 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { TaskGraph, legalTransition, validateFilesWithinScope, runSequentialScheduler, runParallelScheduler } from './index';
-import type { IsolationPool } from './index';
+import { TaskGraph, legalTransition, validateFilesWithinScope, runSequentialScheduler, runParallelScheduler, computeSpawnPlan, recordSpawnPlan } from './index';
+import type { IsolationPool, SpawnCandidate } from './index';
 import type { StoryRecord } from '@codeharness/harness-core';
+import { readJsonl } from '@codeharness/event-log';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import { unlinkSync, existsSync } from 'fs';
 
 const scope = { allowedWriteSet: ['codeharness/packages/foo/src/**'] };
 const g = () => new TaskGraph('STORY-X', 'C-X', scope);
@@ -157,6 +161,55 @@ function makeFakePool(): IsolationPool {
   };
 }
 
+// ── Spawn-plan tests ──────────────────────────────────────────────────────────
+
+const cand = (id: string, ws: string[], cls = 'parallel_safe'): SpawnCandidate =>
+  ({ story_id: id, parallelism_class: cls, allowed_write_set: ws });
+
+describe('spawn-plan', () => {
+  it('write_set_overlap_blocks_parallel_spawn', () => {
+    const plan = computeSpawnPlan([cand('A', ['src/a/**']), cand('B', ['src/**'])]);
+    expect(plan.overlap_pairs.length).toBeGreaterThan(0);
+    const inQueue = (id: string) => plan.sequential_queue.includes(id);
+    expect(inQueue('A') || inQueue('B')).toBe(true);
+  });
+
+  it('non_overlapping_write_sets_spawn_in_parallel', () => {
+    const plan = computeSpawnPlan([cand('A', ['src/a/**']), cand('B', ['test/**'])]);
+    expect(plan.parallel_batch).toContain('A');
+    expect(plan.parallel_batch).toContain('B');
+    expect(plan.sequential_queue).toHaveLength(0);
+  });
+
+  it('exclusive_class_runs_alone', () => {
+    const plan = computeSpawnPlan([cand('X', ['src/**'], 'exclusive'), cand('Y', ['test/**'])]);
+    expect(plan.sequential_queue).toContain('X');
+    expect(plan.parallel_batch).toContain('Y');
+  });
+
+  it('spawn_plan_recorded_in_trace', async () => {
+    const trace = join(tmpdir(), `spawn-trace-test.jsonl`);
+    if (existsSync(trace)) unlinkSync(trace);
+    const plan = computeSpawnPlan([cand('A', ['src/**']), cand('B', ['test/**'])]);
+    await recordSpawnPlan(plan, trace);
+    const events = readJsonl(trace);
+    expect(events[0].type).toBe('spawn_plan');
+    if (existsSync(trace)) unlinkSync(trace);
+  });
+
+  it('three_way_overlap_all_downgraded', () => {
+    const plan = computeSpawnPlan([cand('A', ['src/**']), cand('B', ['src/**']), cand('C', ['src/**'])]);
+    expect(plan.parallel_batch.length).toBeLessThanOrEqual(1);
+    expect(plan.sequential_queue.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('no_overlap_empty_candidates', () => {
+    const plan = computeSpawnPlan([]);
+    expect(plan.parallel_batch).toHaveLength(0);
+    expect(plan.sequential_queue).toHaveLength(0);
+  });
+});
+
 describe('parallel-scheduler', () => {
   it('parallel_safe_stories_run_concurrently_and_complete', async () => {
     const A = makeStory('STORY-A'); A.parallelism_class = 'parallel_safe';
@@ -201,5 +254,21 @@ describe('parallel-scheduler', () => {
       mergeTargetRoot: '/tmp/fake',
     });
     expect(result.outcome).toBe('escalated');
+  });
+
+  it('scheduler_applies_spawn_plan_before_batch', async () => {
+    const A = { ...makeStory('STORY-A'), parallelism_class: 'parallel_safe' as const, allowed_write_set: ['src/**'] };
+    const B = { ...makeStory('STORY-B'), parallelism_class: 'parallel_safe' as const, allowed_write_set: ['src/**'] };
+    const order: string[] = [];
+    await runParallelScheduler({
+      stories: [A, B],
+      runInnerLoopIsolated: async (s, _ws) => { order.push(s.story_id); return true; },
+      runInnerLoopSequential: async (s) => { order.push(s.story_id); return true; },
+      onCheckpoint: fakeCheckpoint,
+      pool: makeFakePool(),
+      mergeTargetRoot: '/tmp/fake',
+    });
+    // Overlap causes serialization — both stories still run, just not in the same batch
+    expect(order.length).toBe(2);
   });
 });

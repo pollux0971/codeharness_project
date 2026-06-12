@@ -1,5 +1,6 @@
 import { selectNextStory } from '@codeharness/harness-core';
 import type { StoryRecord, CheckpointRecord } from '@codeharness/harness-core';
+import { computeSpawnPlan, recordSpawnPlan } from './spawn-plan.js';
 
 // ---- STORY-010.4: minimal structural interface for the isolation pool ----
 // WorkspaceIsolationPool from @codeharness/workspace-manager satisfies this.
@@ -36,6 +37,7 @@ export interface ParallelSchedulerOptions {
   pool: IsolationPool;
   mergeTargetRoot: string;
   runBudget?: number;
+  traceLogPath?: string;
 }
 
 export async function runSequentialScheduler(
@@ -118,10 +120,24 @@ export async function runParallelScheduler(
     }
 
     if (batchParallel.length > 0) {
-      for (const s of batchParallel) s.status = 'in_progress';
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const spawnCandidates = batchParallel.map(s => ({
+        story_id: s.story_id,
+        parallelism_class: s.parallelism_class,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        allowed_write_set: ((s as any).allowed_write_set ?? []) as string[],
+      }));
+      const spawnPlan = computeSpawnPlan(spawnCandidates);
+
+      if (opts.traceLogPath) {
+        await recordSpawnPlan(spawnPlan, opts.traceLogPath);
+      }
+
+      const toRunParallel = batchParallel.filter(s => spawnPlan.parallel_batch.includes(s.story_id));
+      for (const s of toRunParallel) s.status = 'in_progress';
 
       const runs = await opts.pool.runBatch(
-        batchParallel,
+        toRunParallel,
         (sid, ws) => {
           const story = opts.stories.find(s => s.story_id === sid)!;
           return opts.runInnerLoopIsolated(story, ws);
@@ -147,7 +163,7 @@ export async function runParallelScheduler(
         completed.push(story.story_id);
       }
 
-      iterations += batchParallel.length;
+      iterations += toRunParallel.length;
     } else {
       const story = opts.stories.find(s => s.story_id === nextSequential)!;
       story.status = 'in_progress';

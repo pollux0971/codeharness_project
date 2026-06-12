@@ -111,3 +111,5 @@ export const TaskGet = (g: TaskGraph, id: string) => g.get(id);
 
 export type { SchedulerResult, SchedulerRunOptions, ParallelSchedulerOptions, IsolationPool } from './scheduler.js';
 export { runSequentialScheduler, runParallelScheduler } from './scheduler.js';
+export type { SpawnCandidate, SpawnPlan } from './spawn-plan.js';
+export { computeSpawnPlan, recordSpawnPlan } from './spawn-plan.js';
