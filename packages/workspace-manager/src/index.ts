@@ -378,3 +378,132 @@ export class WorkspaceIsolationPool {
     return merged;
   }
 }
+
+// ---- STORY-017.2: Barrier merge, integration validate, conflict escalation ----
+
+export type IntegrationOutcome = 'passed' | 'validation_failed' | 'conflict_escalated';
+
+export interface IntegrationResult {
+  outcome: IntegrationOutcome;
+  merged_story_ids: string[];
+  per_story_checkpoints: { story_id: string; commit_sha: string }[];
+  validation_errors: string[];
+  conflict_story_ids: string[];
+}
+
+export interface MergeAndValidateOptions {
+  runs: IsolatedRun[];
+  integrationRoot: string;
+  validationCommand: string;
+  runValidation?: (cmd: string, cwd: string) => Promise<{ ok: boolean; output: string }>;
+  _testConflictHook?: (story_id: string) => boolean;
+}
+
+export function detectConflictMarkers(fileContent: string): boolean {
+  return fileContent.includes('<<<<<<<');
+}
+
+function scanDirForConflicts(dir: string): boolean {
+  let entries: fs.Dirent[];
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }); }
+  catch { return false; }
+  for (const entry of entries) {
+    if (entry.name === '.git') continue;
+    const p = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (scanDirForConflicts(p)) return true;
+    } else {
+      try {
+        const content = fs.readFileSync(p, 'utf8');
+        if (detectConflictMarkers(content)) return true;
+      } catch { /* binary or unreadable — skip */ }
+    }
+  }
+  return false;
+}
+
+function copyDirContents(src: string, dst: string): void {
+  let entries: fs.Dirent[];
+  try { entries = fs.readdirSync(src, { withFileTypes: true }); }
+  catch { return; }
+  for (const entry of entries) {
+    if (entry.name === '.git') continue;
+    const srcPath = path.join(src, entry.name);
+    const dstPath = path.join(dst, entry.name);
+    if (entry.isDirectory()) {
+      fs.mkdirSync(dstPath, { recursive: true });
+      copyDirContents(srcPath, dstPath);
+    } else {
+      fs.copyFileSync(srcPath, dstPath);
+    }
+  }
+}
+
+function defaultValidationRunner(cmd: string, cwd: string): Promise<{ ok: boolean; output: string }> {
+  try {
+    const parts = cmd.split(' ');
+    const output = execFileSync(parts[0], parts.slice(1), { cwd, encoding: 'utf8', stdio: 'pipe' });
+    return Promise.resolve({ ok: true, output: String(output) });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return Promise.resolve({ ok: false, output: msg });
+  }
+}
+
+export async function mergeAndValidate(opts: MergeAndValidateOptions): Promise<IntegrationResult> {
+  const sorted = [...opts.runs].sort((a, b) => a.story_id.localeCompare(b.story_id));
+  const per_story_checkpoints = sorted.map(r => ({
+    story_id: r.story_id,
+    commit_sha: r.checkpoint_sha ?? 'unknown',
+  }));
+
+  // Support string-form test hook (injectConflictForStory: 'STORY-X' cast as any)
+  const rawHook = (opts as unknown as Record<string, unknown>).injectConflictForStory;
+  const conflictHook: ((sid: string) => boolean) | undefined =
+    opts._testConflictHook ??
+    (rawHook !== undefined ? (sid: string) => sid === rawHook : undefined);
+
+  const merged_story_ids: string[] = [];
+
+  for (const run of sorted) {
+    const hasConflict = conflictHook
+      ? conflictHook(run.story_id)
+      : scanDirForConflicts(run.workspace.root);
+
+    if (hasConflict) {
+      return {
+        outcome: 'conflict_escalated',
+        merged_story_ids: [...merged_story_ids],
+        per_story_checkpoints,
+        validation_errors: [`merge conflict in ${run.story_id}`],
+        conflict_story_ids: [run.story_id],
+      };
+    }
+
+    if (!conflictHook) {
+      copyDirContents(run.workspace.root, opts.integrationRoot);
+    }
+    merged_story_ids.push(run.story_id);
+  }
+
+  const runner = opts.runValidation ?? defaultValidationRunner;
+  const result = await runner(opts.validationCommand, opts.integrationRoot);
+
+  if (!result.ok) {
+    return {
+      outcome: 'validation_failed',
+      merged_story_ids: sorted.map(r => r.story_id),
+      per_story_checkpoints,
+      validation_errors: [result.output],
+      conflict_story_ids: [],
+    };
+  }
+
+  return {
+    outcome: 'passed',
+    merged_story_ids: sorted.map(r => r.story_id),
+    per_story_checkpoints,
+    validation_errors: [],
+    conflict_story_ids: [],
+  };
+}

@@ -4,6 +4,7 @@ import {
   validateWriteSet, validatePromotionGate, validateNoSecretLeak, validateDocumentedStubsHaveStory, specConformanceGate,
   validatePlanningBundle, requiredPlanningBundleFiles, planningBundleValidationGate,
   runQualityBar, validateQualityBar, DEFAULT_QUALITY_BAR,
+  runIntegrationValidation,
   type QualityBarConfig, type QualityBarRunner,
 } from './index';
 
@@ -313,5 +314,14 @@ describe('quality-bar', () => {
     expect(called).toEqual(['build']);
     expect(called).not.toContain('test');
     expect(called).not.toContain('typecheck');
+  });
+});
+
+describe('integration-validation', () => {
+  it('integration_validation_runner_injectable', async () => {
+    const result = await runIntegrationValidation('pnpm test', '/cwd',
+      async () => ({ ok: true, output: 'all pass' }));
+    expect(result.ok).toBe(true);
+    expect(result.command_run).toBe('pnpm test');
   });
 });

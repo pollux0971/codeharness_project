@@ -4,6 +4,8 @@
  * The Test Runner (separate) executes a story's validation_commands for runtime PASS/FAIL.
  * Owner: STORY-000.3.
  */
+import { execFileSync } from 'node:child_process';
+
 export interface ValidationResult { ok: boolean; errors: string[] }
 const isNonEmptyArray = (v: unknown): boolean => Array.isArray(v) && v.length > 0;
 
@@ -193,6 +195,35 @@ export function specConformanceGate(input: {
   if (!input.proposal.rollback_notes) errors.push('proposal: missing rollback_notes');
   return { ok: errors.length === 0, errors };
 }
+
+// ── STORY-017.2: Integration validation runner ───────────────────────────────
+
+export interface IntegrationValidationResult {
+  ok: boolean;
+  errors: string[];
+  command_run: string;
+}
+
+export async function runIntegrationValidation(
+  command: string,
+  cwd: string,
+  runner?: (cmd: string, cwd: string) => Promise<{ ok: boolean; output: string }>,
+): Promise<IntegrationValidationResult> {
+  if (runner) {
+    const result = await runner(command, cwd);
+    return { ok: result.ok, errors: result.ok ? [] : [result.output], command_run: command };
+  }
+  try {
+    const parts = command.split(' ');
+    execFileSync(parts[0], parts.slice(1), { cwd, encoding: 'utf8', stdio: 'pipe' });
+    return { ok: true, errors: [], command_run: command };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, errors: [msg], command_run: command };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * STORY-009.3: Gate that validates a PlanningBundle object before backlog emission.

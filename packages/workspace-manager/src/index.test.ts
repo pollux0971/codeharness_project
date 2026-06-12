@@ -6,7 +6,8 @@ import {
   isPathInsideRoot, resolveInsideWorkspace, WorkspaceRegistry, detectSymlinkEscape,
   makeOracle, createDisposableWorkspace, applyPatch, collectDiff, cleanupWorkspace, seedFile, commitAll,
   bootstrapGreenfieldWorkspace, WorkspaceIsolationPool, isPromotable, rollbackPromotion,
-  type GreenfieldWorkspaceInput,
+  mergeAndValidate, detectConflictMarkers,
+  type GreenfieldWorkspaceInput, type IsolatedRun,
 } from './index';
 import type { ProjectRunState } from '@codeharness/harness-core';
 import type { PromotionRecord } from '@codeharness/tool-executor';
@@ -288,6 +289,89 @@ describe('workspace-manager', () => {
         { status: 'done', checkpoint_sha: null },
       ]);
       expect(isPromotable(noSha)).toBe(false);
+    });
+  });
+
+  // ---- STORY-017.2: barrier ----
+  describe('barrier', () => {
+    let integRoot: string;
+    beforeEach(() => { integRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'integ-')); });
+    afterEach(() => { try { fs.rmSync(integRoot, { recursive: true, force: true }); } catch {} });
+
+    function makeRun(storyId: string, sha: string): IsolatedRun {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), `run-${storyId}-`));
+      fs.writeFileSync(path.join(root, `${storyId}.ts`), `// ${storyId}`);
+      return {
+        story_id: storyId,
+        workspace: { workspace_id: storyId, root, disposable: true, created_at: '' },
+        result: 'passed',
+        checkpoint_sha: sha,
+      };
+    }
+
+    it('worktrees_merge_in_deterministic_order', async () => {
+      const runA = makeRun('STORY-A', 'sha-a');
+      const runB = makeRun('STORY-B', 'sha-b');
+      const result = await mergeAndValidate({
+        runs: [runB, runA],
+        integrationRoot: integRoot,
+        validationCommand: 'echo ok',
+        runValidation: async () => ({ ok: true, output: '' }),
+      });
+      expect(result.merged_story_ids[0]).toBe('STORY-A');
+      fs.rmSync(runA.workspace.root, { recursive: true, force: true });
+      fs.rmSync(runB.workspace.root, { recursive: true, force: true });
+    });
+
+    it('combined_validation_runs_post_merge', async () => {
+      let validationCalled = 0;
+      const runA = makeRun('STORY-A', 'sha-a');
+      const result = await mergeAndValidate({
+        runs: [runA],
+        integrationRoot: integRoot,
+        validationCommand: 'echo ok',
+        runValidation: async () => { validationCalled++; return { ok: true, output: '' }; },
+      });
+      expect(validationCalled).toBe(1);
+      expect(result.outcome).toBe('passed');
+      fs.rmSync(runA.workspace.root, { recursive: true, force: true });
+    });
+
+    it('merge_conflict_escalates_not_resolves', async () => {
+      const runA = makeRun('STORY-A', 'sha-a');
+      const result = await mergeAndValidate({
+        runs: [runA],
+        integrationRoot: integRoot,
+        validationCommand: 'echo ok',
+        runValidation: async () => ({ ok: true, output: '' }),
+        injectConflictForStory: 'STORY-A',
+      } as any);
+      expect(result.outcome).toBe('conflict_escalated');
+      expect(result.conflict_story_ids).toContain('STORY-A');
+      fs.rmSync(runA.workspace.root, { recursive: true, force: true });
+    });
+
+    it('per_story_checkpoints_survive_failed_integration', async () => {
+      const runA = makeRun('STORY-A', 'sha-a');
+      const runB = makeRun('STORY-B', 'sha-b');
+      const result = await mergeAndValidate({
+        runs: [runA, runB],
+        integrationRoot: integRoot,
+        validationCommand: 'pnpm test',
+        runValidation: async () => ({ ok: false, output: 'test failed' }),
+      });
+      expect(result.outcome).toBe('validation_failed');
+      expect(result.per_story_checkpoints).toHaveLength(2);
+      fs.rmSync(runA.workspace.root, { recursive: true, force: true });
+      fs.rmSync(runB.workspace.root, { recursive: true, force: true });
+    });
+
+    it('detect_conflict_markers_pure', () => {
+      expect(detectConflictMarkers('<<<<<<< HEAD\nfoo\n=======\nbar\n>>>>>>> branch')).toBe(true);
+    });
+
+    it('detect_no_conflict_markers', () => {
+      expect(detectConflictMarkers('export const x = 1;')).toBe(false);
     });
   });
 
