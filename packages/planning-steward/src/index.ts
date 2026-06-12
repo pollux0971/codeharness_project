@@ -1,3 +1,10 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { computeImpactSet, NULL_CLIENT } from '@codeharness/codegraph-adapter';
+import type { CodeGraphClient } from '@codeharness/codegraph-adapter';
+import { extractProjectProfile } from '@codeharness/context-manager';
+import type { ProjectProfile } from '@codeharness/context-manager';
+
 export type IdeaMode = 'greenfield' | 'brownfield' | 'patch' | 'checkpoint' | 'research_spike';
 
 export interface IdeaInput {
@@ -648,4 +655,200 @@ export async function triageDefect(
 
   const repair_story = buildRepairStory({ report, defectClass: defect_class, reproduction, impactedFiles });
   return { report, defect_class, reproduction, repair_story, triage_blocked: false };
+}
+
+// ── STORY-020.1: Brownfield mode entry — repo import and as-is recovery ────────
+
+export interface BrownfieldLayer {
+  name: string;
+  paths: string[];
+}
+
+export interface BrownfieldIntake {
+  intake_id: string;
+  repo_path: string;
+  intake_at: string;
+  entry_points: string[];
+  layers: BrownfieldLayer[];
+  dependency_map: Record<string, string[]>;
+  conventions: Record<string, unknown>;
+  recovery_docs_path: string;
+}
+
+export interface BrownfieldImportOptions {
+  repoPath: string;
+  outputPath: string;
+  codegraphClient?: CodeGraphClient;
+  extractProfile?: (path: string) => ProjectProfile;
+}
+
+function discoverEntryPoints(repoPath: string): string[] {
+  const candidates: string[] = [];
+  try {
+    const pkgRaw = fs.readFileSync(path.join(repoPath, 'package.json'), 'utf8');
+    const pkg = JSON.parse(pkgRaw) as Record<string, unknown>;
+    if (typeof pkg.main === 'string') candidates.push(pkg.main);
+    if (typeof pkg.bin === 'string') candidates.push(pkg.bin);
+    if (typeof pkg.bin === 'object' && pkg.bin !== null) {
+      candidates.push(...Object.values(pkg.bin as Record<string, unknown>).filter((v): v is string => typeof v === 'string'));
+    }
+  } catch { /* no package.json or parse error */ }
+  for (const f of ['src/index.ts', 'src/main.ts', 'src/cli.ts', 'app.ts']) {
+    candidates.push(f);
+  }
+  return [...new Set(candidates)].filter(f => {
+    try { return fs.existsSync(path.join(repoPath, f)); } catch { return false; }
+  });
+}
+
+function classifyLayers(repoPath: string): BrownfieldLayer[] {
+  const layers: BrownfieldLayer[] = [];
+
+  const testPaths = ['test', 'tests', '__tests__'].filter(d => {
+    try { return fs.existsSync(path.join(repoPath, d)); } catch { return false; }
+  }).map(d => d + '/');
+  if (testPaths.length > 0) layers.push({ name: 'test', paths: testPaths });
+
+  const configDirs = ['configs'].filter(d => {
+    try { return fs.existsSync(path.join(repoPath, d)); } catch { return false; }
+  }).map(d => d + '/');
+  const configFiles: string[] = [];
+  try {
+    for (const e of fs.readdirSync(repoPath)) {
+      const full = path.join(repoPath, e);
+      try {
+        if (fs.statSync(full).isDirectory()) continue;
+      } catch { continue; }
+      if (e.startsWith('.env') || e.endsWith('.yaml') || e.endsWith('.yml') || /\.config\./.test(e)) {
+        configFiles.push(e);
+      }
+    }
+  } catch { /* ignore */ }
+  const configPaths = [...configDirs, ...configFiles];
+  if (configPaths.length > 0) layers.push({ name: 'config', paths: configPaths });
+
+  const apiDirs = ['routes', 'api', 'controllers', 'handlers'].filter(d => {
+    try { return fs.existsSync(path.join(repoPath, 'src', d)); } catch { return false; }
+  }).map(d => `src/${d}/`);
+  if (apiDirs.length > 0) layers.push({ name: 'api', paths: apiDirs });
+
+  const domainDirs = ['domain', 'services', 'models', 'core'].filter(d => {
+    try { return fs.existsSync(path.join(repoPath, 'src', d)); } catch { return false; }
+  }).map(d => `src/${d}/`);
+  if (domainDirs.length > 0) layers.push({ name: 'domain', paths: domainDirs });
+
+  const infraDirs = ['db', 'cache', 'queue', 'storage'].filter(d => {
+    try { return fs.existsSync(path.join(repoPath, 'src', d)); } catch { return false; }
+  }).map(d => `src/${d}/`);
+  if (infraDirs.length > 0) layers.push({ name: 'infra', paths: infraDirs });
+
+  const hasSrc = (() => { try { return fs.existsSync(path.join(repoPath, 'src')); } catch { return false; } })();
+  if (hasSrc) layers.push({ name: 'root', paths: ['src/'] });
+
+  return layers;
+}
+
+function buildArchitectureMd(entry_points: string[], layers: BrownfieldLayer[]): string {
+  const lines: string[] = ['# As-Is Architecture', '', '## Entry Points'];
+  if (entry_points.length > 0) {
+    lines.push(...entry_points.map(e => `- ${e}`));
+  } else {
+    lines.push('_No entry points detected_');
+  }
+  lines.push('', '## Layers');
+  for (const layer of layers) {
+    lines.push(`### ${layer.name}`);
+    lines.push(...layer.paths.map(p => `- ${p}`));
+    lines.push('');
+  }
+  return lines.join('\n');
+}
+
+function buildConventionsMd(conventions: Record<string, unknown>): string {
+  const lines: string[] = ['# As-Is Conventions', ''];
+  for (const [k, v] of Object.entries(conventions)) {
+    lines.push(`- **${k}**: ${v}`);
+  }
+  return lines.join('\n');
+}
+
+export async function importBrownfieldRepo(opts: BrownfieldImportOptions): Promise<BrownfieldIntake> {
+  const resolvedRepo = path.resolve(opts.repoPath);
+  const resolvedOutput = path.resolve(opts.outputPath);
+
+  if (resolvedOutput === resolvedRepo || resolvedOutput.startsWith(resolvedRepo + path.sep)) {
+    throw new Error('brownfield_import_error: output must not be inside source repo');
+  }
+
+  const profile = opts.extractProfile
+    ? opts.extractProfile(opts.repoPath)
+    : extractProjectProfile(opts.repoPath);
+
+  const entry_points = discoverEntryPoints(opts.repoPath);
+  const layers = classifyLayers(opts.repoPath);
+
+  const client = opts.codegraphClient ?? NULL_CLIENT;
+  const impactResult = await computeImpactSet([opts.repoPath], client);
+  const dependency_map: Record<string, string[]> = {};
+  for (const f of impactResult.impactedFiles) {
+    dependency_map[f] = [];
+  }
+
+  const conventions: Record<string, unknown> = {
+    framework: profile.test_layout.framework,
+    language: profile.toolchain.language,
+    lint: profile.toolchain.lint_tool,
+  };
+
+  const asisDir = path.join(opts.outputPath, 'as-is');
+  fs.mkdirSync(asisDir, { recursive: true });
+  fs.writeFileSync(path.join(asisDir, 'ARCHITECTURE.md'), buildArchitectureMd(entry_points, layers), 'utf8');
+  fs.writeFileSync(path.join(asisDir, 'CONVENTIONS.md'), buildConventionsMd(conventions), 'utf8');
+
+  return {
+    intake_id: `bf-${Date.now().toString(36)}`,
+    repo_path: opts.repoPath,
+    intake_at: new Date().toISOString(),
+    entry_points,
+    layers,
+    dependency_map,
+    conventions,
+    recovery_docs_path: path.join(opts.outputPath, 'as-is'),
+  };
+}
+
+const REQUIRED_INTAKE_FIELDS = [
+  'intake_id', 'repo_path', 'intake_at', 'entry_points',
+  'layers', 'dependency_map', 'conventions', 'recovery_docs_path',
+] as const;
+
+export function validateBrownfieldIntake(intake: unknown): ValidationResult {
+  if (typeof intake !== 'object' || intake === null) {
+    return { ok: false, errors: ['brownfield intake must be a non-null object'] };
+  }
+  const r = intake as Record<string, unknown>;
+  const errors: string[] = [];
+
+  for (const field of REQUIRED_INTAKE_FIELDS) {
+    if (!(field in r) || r[field] === undefined || r[field] === null) {
+      errors.push(`missing required field: ${field}`);
+    }
+  }
+
+  for (const field of ['intake_id', 'repo_path', 'intake_at', 'recovery_docs_path'] as const) {
+    if (field in r && typeof r[field] === 'string' && !(r[field] as string).trim()) {
+      errors.push(`field ${field} must be non-empty`);
+    }
+  }
+
+  if (
+    typeof r.recovery_docs_path === 'string' &&
+    typeof r.repo_path === 'string' &&
+    (r.recovery_docs_path as string).trim() &&
+    r.recovery_docs_path === r.repo_path
+  ) {
+    errors.push('recovery_docs_path must differ from repo_path');
+  }
+
+  return { ok: errors.length === 0, errors };
 }

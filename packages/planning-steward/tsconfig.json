@@ -11,5 +11,9 @@
   "exclude": [
     "src/**/*.test.ts",
     "dist"
+  ],
+  "references": [
+    { "path": "../codegraph-adapter" },
+    { "path": "../context-manager" }
   ]
 }

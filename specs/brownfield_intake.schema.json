@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "BrownfieldIntake",
+  "description": "Output of a brownfield repo import. All fields derived read-only from the source repo.",
+  "type": "object",
+  "required": ["intake_id", "repo_path", "intake_at", "entry_points", "layers",
+               "dependency_map", "conventions", "recovery_docs_path"],
+  "properties": {
+    "intake_id":          { "type": "string" },
+    "repo_path":          { "type": "string" },
+    "intake_at":          { "type": "string", "format": "date-time" },
+    "entry_points":       { "type": "array", "items": { "type": "string" } },
+    "layers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "paths"],
+        "properties": {
+          "name":  { "type": "string" },
+          "paths": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "dependency_map": {
+      "type": "object",
+      "description": "file → list of files it depends on",
+      "additionalProperties": { "type": "array", "items": { "type": "string" } }
+    },
+    "conventions": { "type": "object", "description": "ProjectProfile summary fields" },
+    "recovery_docs_path": { "type": "string", "description": "as-is/ output directory" }
+  }
+}

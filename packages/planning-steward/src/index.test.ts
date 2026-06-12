@@ -1,10 +1,14 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import {
   classifyIdea, detectParallelismConflict, selectableStories, validatePlanningBundle,
   createPlanningBundle, requiredPlanningFiles, StoryNode, IdeaInput,
   generateBacklogFromPlanningBundle, buildStoryGraph, PlanningBundle,
   validateDefectReport, sanitizeDefectText, detectPromptInjection,
   classifyDefect, attemptReproduction, buildRepairStory, triageDefect,
+  importBrownfieldRepo, validateBrownfieldIntake,
   type DefectReport, type TestRunner,
 } from './index';
 
@@ -667,5 +671,70 @@ describe('STORY-009.2: buildStoryGraph', () => {
     const n1 = buildStoryGraph(BUNDLE_FOR_GEN).map(n => n.story_id);
     const n2 = buildStoryGraph(BUNDLE_FOR_GEN).map(n => n.story_id);
     expect(n1).toEqual(n2);
+  });
+});
+
+// ── STORY-020.1: brownfield-intake ────────────────────────────────────────────
+
+function makeTmpRepo(): string {
+  const root = mkdtempSync(join(tmpdir(), 'bf-repo-'));
+  mkdirSync(join(root, 'src'));
+  mkdirSync(join(root, 'test'));
+  writeFileSync(join(root, 'src', 'index.ts'), 'export const x = 1;');
+  writeFileSync(join(root, 'test', 'x.test.ts'), 'test("x", () => {})');
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'my-proj', devDependencies: { vitest: '^1' } }));
+  return root;
+}
+
+describe('brownfield-intake', () => {
+  let repoRoot: string, outputRoot: string;
+  beforeEach(() => {
+    repoRoot = makeTmpRepo();
+    outputRoot = mkdtempSync(join(tmpdir(), 'bf-out-'));
+  });
+  afterEach(() => {
+    try { rmSync(repoRoot,   { recursive: true, force: true }); } catch { /* ignore */ }
+    try { rmSync(outputRoot, { recursive: true, force: true }); } catch { /* ignore */ }
+  });
+
+  it('existing_repo_imported_read_only', async () => {
+    const intake = await importBrownfieldRepo({ repoPath: repoRoot, outputPath: outputRoot });
+    expect(existsSync(join(repoRoot, 'as-is'))).toBe(false);
+    expect(intake.repo_path).toBe(repoRoot);
+  });
+
+  it('as_is_architecture_recovered', async () => {
+    const intake = await importBrownfieldRepo({ repoPath: repoRoot, outputPath: outputRoot });
+    expect(existsSync(join(outputRoot, 'as-is', 'ARCHITECTURE.md'))).toBe(true);
+    expect(intake.layers.length).toBeGreaterThan(0);
+  });
+
+  it('dependency_map_generated', async () => {
+    const intake = await importBrownfieldRepo({ repoPath: repoRoot, outputPath: outputRoot });
+    expect(typeof intake.dependency_map).toBe('object');
+  });
+
+  it('recovery_docs_written_to_designated_area', async () => {
+    await importBrownfieldRepo({ repoPath: repoRoot, outputPath: outputRoot });
+    expect(existsSync(join(outputRoot, 'as-is', 'ARCHITECTURE.md'))).toBe(true);
+    expect(existsSync(join(outputRoot, 'as-is', 'CONVENTIONS.md'))).toBe(true);
+  });
+
+  it('output_outside_source_repo', async () => {
+    await expect(importBrownfieldRepo({
+      repoPath: repoRoot, outputPath: repoRoot,
+    })).rejects.toThrow(/output must not be inside source repo/);
+  });
+
+  it('validate_brownfield_intake_valid', async () => {
+    const intake = await importBrownfieldRepo({ repoPath: repoRoot, outputPath: outputRoot });
+    expect(validateBrownfieldIntake(intake).ok).toBe(true);
+  });
+
+  it('validate_brownfield_intake_missing_field', () => {
+    const bad = { intake_id: 'x', repo_path: '/r', intake_at: '2026-01-01T00:00:00Z',
+                  layers: [], dependency_map: {}, conventions: {}, recovery_docs_path: '/o' };
+    // missing entry_points
+    expect(validateBrownfieldIntake(bad).ok).toBe(false);
   });
 });
