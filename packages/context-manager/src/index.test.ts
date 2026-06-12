@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -7,6 +7,7 @@ import {
   detectPhase, requiredContextSections, lifecycleToTrajectory, injectSkillsIntoPacket,
   extractProjectProfile, injectProjectProfile,
   compactContextWindow, DEFAULT_CONFIG,
+  buildModeAwarePacket, assertDocWriteSafe,
   ArtifactRef, PhaseSignals, LifecyclePhase, ContextWindow, Turn,
 } from './index';
 import type { FullSkillManifest } from '@codeharness/skill-runtime';
@@ -432,5 +433,48 @@ describe('compaction', () => {
     for (let i = 0; i < 3; i++) {
       expect(contents.some(c => c.includes(`PINNED_${i}`))).toBe(true);
     }
+  });
+});
+
+// ── STORY-020.5: mode-aware document flow ────────────────────────────────────
+
+describe('mode-aware-docs', () => {
+  let asIsDir: string;
+  beforeEach(() => {
+    asIsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'asis-'));
+    fs.mkdirSync(path.join(asIsDir, 'as-is'));
+    fs.writeFileSync(path.join(asIsDir, 'as-is', 'ARCHITECTURE.md'), '# Architecture\nEntry: src/index.ts');
+    fs.writeFileSync(path.join(asIsDir, 'as-is', 'CONVENTIONS.md'),  '# Conventions\ntypeScript, vitest');
+  });
+  afterEach(() => {
+    try { fs.rmSync(asIsDir, { recursive: true, force: true }); } catch { /* ignore */ }
+  });
+
+  it('greenfield_loads_templates_brownfield_loads_profile_and_impact', () => {
+    const gf = buildModeAwarePacket('developer', { mode: 'greenfield' });
+    const bf = buildModeAwarePacket('developer', { mode: 'brownfield', asIsDocsPath: asIsDir });
+    expect(gf.sections.some(s => s.name.includes('as-is'))).toBe(false);
+    expect(bf.sections.some(s => s.name.includes('as-is'))).toBe(true);
+  });
+
+  it('existing_docs_ingested_read_only', () => {
+    const archPath = path.join(asIsDir, 'as-is', 'ARCHITECTURE.md');
+    const before = fs.readFileSync(archPath, 'utf8');
+    buildModeAwarePacket('developer', { mode: 'brownfield', asIsDocsPath: asIsDir });
+    expect(fs.readFileSync(archPath, 'utf8')).toBe(before);
+  });
+
+  it('as_is_and_to_be_docs_separated', () => {
+    const packet = buildModeAwarePacket('developer', { mode: 'brownfield', asIsDocsPath: asIsDir });
+    const asIsSection = packet.sections.find(s => s.name.includes('as-is'));
+    expect(asIsSection?.priority).toBe(1);
+  });
+
+  it('generated_docs_never_overwrite_outside_write_set', () => {
+    expect(() => assertDocWriteSafe('docs/README.md', ['src/**'])).toThrow(/doc_write_blocked/);
+  });
+
+  it('write_safe_passes_for_allowed_path', () => {
+    expect(() => assertDocWriteSafe('src/README.md', ['src/**'])).not.toThrow();
   });
 });

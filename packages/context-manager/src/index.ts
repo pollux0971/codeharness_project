@@ -421,6 +421,75 @@ export function injectProjectProfile(
   return { ...packet, sections: [...packet.sections, ref] };
 }
 
+// ── STORY-020.5: Mode-aware document flow ────────────────────────────────────
+
+export type DocumentMode = 'greenfield' | 'brownfield' | 'patch';
+
+export interface ModeAwarePacketOptions {
+  mode: DocumentMode;
+  asIsDocsPath?: string;
+  allowedWriteSet?: string[];
+  profile?: ProjectProfile;
+  impactedFiles?: string[];
+}
+
+export function buildModeAwarePacket(
+  role: AgentRole,
+  opts: ModeAwarePacketOptions,
+): RoleContextPacket {
+  let packet = buildRoleContextPacket(role, []);
+
+  if (opts.profile) {
+    packet = injectProjectProfile(packet, opts.profile);
+  }
+
+  if ((opts.mode === 'brownfield' || opts.mode === 'patch') && opts.asIsDocsPath) {
+    const archPath = path.join(opts.asIsDocsPath, 'as-is', 'ARCHITECTURE.md');
+    const convPath = path.join(opts.asIsDocsPath, 'as-is', 'CONVENTIONS.md');
+    const asIsSections: ArtifactRef[] = [];
+    try {
+      const content = fs.readFileSync(archPath, 'utf8');
+      asIsSections.push({
+        name: 'as-is/ARCHITECTURE.md', ref: archPath, text: content,
+        priority: 1, tokenCount: Math.ceil(content.length / 4),
+      });
+    } catch (_e) { /* skip gracefully if file absent */ }
+    try {
+      const content = fs.readFileSync(convPath, 'utf8');
+      asIsSections.push({
+        name: 'as-is/CONVENTIONS.md', ref: convPath, text: content,
+        priority: 1, tokenCount: Math.ceil(content.length / 4),
+      });
+    } catch (_e) { /* skip gracefully if file absent */ }
+    packet = { ...packet, sections: [...packet.sections, ...asIsSections] };
+  }
+
+  if (opts.mode === 'patch' && opts.impactedFiles && opts.impactedFiles.length > 0) {
+    const summary = opts.impactedFiles.join(', ');
+    packet = {
+      ...packet,
+      sections: [...packet.sections, {
+        name: 'impact-set', ref: 'codegraph-impact',
+        text: `Impacted files: ${summary}`,
+        priority: 2, tokenCount: Math.ceil(summary.length / 4),
+      }],
+    };
+  }
+
+  return packet;
+}
+
+export function assertDocWriteSafe(
+  outputPath: string,
+  allowedWriteSet: string[],
+): void {
+  const norm = (g: string) => g.replace(/\*+$/, '');
+  const safe = allowedWriteSet.some(g => outputPath.startsWith(norm(g)));
+  if (!safe) {
+    throw new Error('doc_write_blocked: path not in write-set');
+  }
+}
+
 // ── STORY-014.6: role-scoped skill injection ──────────────────────────────────
 
 export interface SkillInjectionOptions {
@@ -497,3 +566,4 @@ export async function injectSkillsIntoPacket(
     excluded: [...packet.excluded, ...deferred],
   };
 }
+
