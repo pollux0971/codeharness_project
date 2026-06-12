@@ -314,6 +314,76 @@ export class BudgetGuard {
   get isKilled(): boolean {
     return this.killed;
   }
+
+  get usage(): { calls: number; tokens: number } {
+    return { calls: this.calls, tokens: this.tokens };
+  }
+}
+
+export interface RunBudgetPoolConfig {
+  totalCallsBudget: number;
+  totalTokensBudget: number;
+  perWorkerCallsBudget?: number;
+  perWorkerTokensBudget?: number;
+  maxWorkers: number;
+}
+
+export class RunBudgetPool {
+  private workers: Map<string, BudgetGuard> = new Map();
+  private _killed = false;
+
+  constructor(private config: RunBudgetPoolConfig) {}
+
+  registerWorker(workerId: string): BudgetGuard {
+    if (this.workers.has(workerId)) {
+      return this.workers.get(workerId)!;
+    }
+    const callBudget = this.config.perWorkerCallsBudget ??
+      Math.floor(this.config.totalCallsBudget / this.config.maxWorkers);
+    const tokenBudget = this.config.perWorkerTokensBudget ??
+      Math.floor(this.config.totalTokensBudget / this.config.maxWorkers);
+    const guard = new BudgetGuard(workerId, {
+      maxCallsPerStory: callBudget,
+      maxTokensPerStory: tokenBudget,
+      onExceed: 'escalate',
+    });
+    if (this._killed) {
+      guard.kill('pool was killed before worker registered');
+    }
+    this.workers.set(workerId, guard);
+    return guard;
+  }
+
+  killAll(reason: string): void {
+    this._killed = true;
+    for (const guard of this.workers.values()) {
+      guard.kill(reason);
+    }
+  }
+
+  get isKilled(): boolean {
+    return this._killed;
+  }
+
+  get totalUsage(): { calls: number; tokens: number } {
+    let calls = 0;
+    let tokens = 0;
+    for (const guard of this.workers.values()) {
+      calls += guard.usage.calls;
+      tokens += guard.usage.tokens;
+    }
+    return { calls, tokens };
+  }
+}
+
+export async function workerGuardedCall(
+  pool: RunBudgetPool,
+  workerId: string,
+  provider: ModelProvider,
+  req: ModelGatewayRequest
+): Promise<ProviderResult> {
+  const guard = pool.registerWorker(workerId);
+  return guardedCall(guard, provider, req);
 }
 
 export async function guardedCall(

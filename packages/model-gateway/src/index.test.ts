@@ -4,6 +4,8 @@ import path from 'node:path';
 import os from 'node:os';
 import {
   BudgetGuard,
+  RunBudgetPool,
+  workerGuardedCall,
   callFirstValid,
   callProvider,
   createDisabledRemoteProvider,
@@ -203,6 +205,71 @@ describe('budget-guard', () => {
     expect(guard.check().ok).toBe(true);
     guard.record({ inputTokens: 10, outputTokens: 11 });
     expect(guard.check().ok).toBe(false);
+  });
+});
+
+describe('run-budget-pool', () => {
+  it('run_budget_partitioned_across_workers', () => {
+    const pool = new RunBudgetPool({ totalCallsBudget: 10, totalTokensBudget: 100000, maxWorkers: 2 });
+    const g1 = pool.registerWorker('w1');
+    const g2 = pool.registerWorker('w2');
+    // Per-worker budget = floor(10/2) = 5 calls
+    for (let i = 0; i < 4; i++) g1.record({ inputTokens: 1, outputTokens: 1 });
+    expect(g1.check().ok).toBe(true);   // 4/5 calls used — still ok
+    g1.record({ inputTokens: 1, outputTokens: 1 }); // 5th call
+    expect(g1.check().ok).toBe(false);  // 5/5 — at budget limit
+    expect(g2.check().ok).toBe(true);   // w2 unaffected
+  });
+
+  it('worker_overrun_escalates_without_blocking_others', () => {
+    const pool = new RunBudgetPool({ totalCallsBudget: 2, totalTokensBudget: 100000, maxWorkers: 2 });
+    const g1 = pool.registerWorker('w1');
+    const g2 = pool.registerWorker('w2');
+    // Per-worker budget = floor(2/2) = 1 call
+    g1.record({ inputTokens: 1, outputTokens: 1 });
+    g1.record({ inputTokens: 1, outputTokens: 1 }); // over budget
+    expect(g1.check().ok).toBe(false);
+    expect(g2.check().ok).toBe(true);
+    expect(pool.isKilled).toBe(false);  // pool not killed
+  });
+
+  it('kill_switch_halts_all_workers', () => {
+    const pool = new RunBudgetPool({ totalCallsBudget: 100, totalTokensBudget: 999999, maxWorkers: 3 });
+    const g1 = pool.registerWorker('w1');
+    const g2 = pool.registerWorker('w2');
+    pool.killAll('test kill');
+    expect(g1.isKilled).toBe(true);
+    expect(g2.isKilled).toBe(true);
+    expect(pool.isKilled).toBe(true);
+  });
+
+  it('new_worker_registered_after_kill_is_already_killed', () => {
+    const pool = new RunBudgetPool({ totalCallsBudget: 100, totalTokensBudget: 999999, maxWorkers: 2 });
+    pool.killAll('pre-kill');
+    const g = pool.registerWorker('late');
+    expect(g.isKilled).toBe(true);
+  });
+
+  it('total_usage_accumulates_across_workers', () => {
+    const pool = new RunBudgetPool({ totalCallsBudget: 100, totalTokensBudget: 999999, maxWorkers: 2 });
+    const g1 = pool.registerWorker('w1');
+    const g2 = pool.registerWorker('w2');
+    g1.record({ inputTokens: 10, outputTokens: 5 });
+    g1.record({ inputTokens: 10, outputTokens: 5 });
+    g2.record({ inputTokens: 20, outputTokens: 10 });
+    const usage = pool.totalUsage;
+    expect(usage.calls).toBe(3);
+    expect(usage.tokens).toBe(60);
+  });
+
+  it('worker_guarded_call_uses_per_worker_budget', async () => {
+    const pool = new RunBudgetPool({ totalCallsBudget: 2, totalTokensBudget: 999999, maxWorkers: 2 });
+    // Per-worker budget = floor(2/2) = 1 call
+    const p = createScriptedProvider('p', [{ case_id: 'c', match: {}, output: goodDeveloperOutput }]);
+    const r1 = await workerGuardedCall(pool, 'w1', p, req);
+    expect(r1.ok).toBe(true);
+    const r2 = await workerGuardedCall(pool, 'w1', p, req);
+    expect(r2.ok).toBe(false);  // second call exceeds per-worker budget of 1
   });
 });
 
