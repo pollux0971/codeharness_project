@@ -12,134 +12,286 @@
       "skill_id": "planning-steward.idea-to-epic",
       "agent_role": "planning_steward",
       "path": "skills/planning-steward/idea-to-epic",
-      "status": "needs_tests",
-      "tests": "skills/planning-steward/idea-to-epic/tests"
+      "status": "registered",
+      "tests": "skills/planning-steward/idea-to-epic/tests",
+      "last_evaluation": {
+        "passed": 5,
+        "total": 5,
+        "fresh_runs": 1,
+        "pass_rate": 1.0,
+        "at": "2026-06-12T09:41:17.688075Z"
+      },
+      "leakage_audit": "unrun"
     },
     {
       "skill_id": "supervisor.story-contract",
       "agent_role": "supervisor",
       "path": "skills/supervisor/story-contract",
-      "status": "needs_tests",
-      "tests": "skills/supervisor/story-contract/tests"
+      "status": "registered",
+      "tests": "skills/supervisor/story-contract/tests",
+      "last_evaluation": {
+        "passed": 5,
+        "total": 5,
+        "fresh_runs": 1,
+        "pass_rate": 1.0,
+        "at": "2026-06-12T09:41:17.858567Z"
+      },
+      "leakage_audit": "unrun"
     },
     {
       "skill_id": "developer.patch-proposal",
       "agent_role": "developer",
       "path": "skills/developer/patch-proposal",
-      "status": "needs_tests",
-      "tests": "skills/developer/patch-proposal/tests"
+      "status": "registered",
+      "tests": "skills/developer/patch-proposal/tests",
+      "last_evaluation": {
+        "passed": 5,
+        "total": 5,
+        "fresh_runs": 1,
+        "pass_rate": 1.0,
+        "at": "2026-06-12T09:41:18.024658Z"
+      },
+      "leakage_audit": "unrun"
     },
     {
       "skill_id": "debugger.failure-triage",
       "agent_role": "debugger",
       "path": "skills/debugger/failure-triage",
-      "status": "needs_tests",
-      "tests": "skills/debugger/failure-triage/tests"
+      "status": "registered",
+      "tests": "skills/debugger/failure-triage/tests",
+      "last_evaluation": {
+        "passed": 6,
+        "total": 6,
+        "fresh_runs": 1,
+        "pass_rate": 1.0,
+        "at": "2026-06-12T09:41:18.188034Z"
+      },
+      "leakage_audit": "unrun"
     },
     {
       "skill_id": "shared.example-skill",
       "agent_role": "shared",
       "path": "skills/_TEMPLATE",
-      "status": "draft",
-      "tests": "skills/_TEMPLATE/tests"
+      "status": "quarantined",
+      "tests": "skills/_TEMPLATE/tests",
+      "last_evaluation": {
+        "passed": 0,
+        "total": 0,
+        "fresh_runs": 1,
+        "pass_rate": 0.0,
+        "at": "2026-06-12T09:41:18.188074Z"
+      },
+      "leakage_audit": "unrun"
     },
     {
       "skill_id": "planning-steward.prd-authoring",
       "agent_role": "planning_steward",
       "path": "skills/planning-steward/prd-authoring",
-      "status": "needs_tests",
-      "tests": "skills/planning-steward/prd-authoring/tests"
+      "status": "registered",
+      "tests": "skills/planning-steward/prd-authoring/tests",
+      "last_evaluation": {
+        "passed": 4,
+        "total": 4,
+        "fresh_runs": 1,
+        "pass_rate": 1.0,
+        "at": "2026-06-12T09:41:18.352854Z"
+      },
+      "leakage_audit": "unrun"
     },
     {
       "skill_id": "planning-steward.architecture-design",
       "agent_role": "planning_steward",
       "path": "skills/planning-steward/architecture-design",
-      "status": "needs_tests",
-      "tests": "skills/planning-steward/architecture-design/tests"
+      "status": "registered",
+      "tests": "skills/planning-steward/architecture-design/tests",
+      "last_evaluation": {
+        "passed": 4,
+        "total": 4,
+        "fresh_runs": 1,
+        "pass_rate": 1.0,
+        "at": "2026-06-12T09:41:18.517005Z"
+      },
+      "leakage_audit": "unrun"
     },
     {
       "skill_id": "planning-steward.epic-story-sharding",
       "agent_role": "planning_steward",
       "path": "skills/planning-steward/epic-story-sharding",
-      "status": "needs_tests",
-      "tests": "skills/planning-steward/epic-story-sharding/tests"
+      "status": "registered",
+      "tests": "skills/planning-steward/epic-story-sharding/tests",
+      "last_evaluation": {
+        "passed": 4,
+        "total": 4,
+        "fresh_runs": 1,
+        "pass_rate": 1.0,
+        "at": "2026-06-12T09:41:18.677948Z"
+      },
+      "leakage_audit": "unrun"
     },
     {
       "skill_id": "planning-steward.machine-checkable-acceptance",
       "agent_role": "planning_steward",
       "path": "skills/planning-steward/machine-checkable-acceptance",
-      "status": "needs_tests",
-      "tests": "skills/planning-steward/machine-checkable-acceptance/tests"
+      "status": "registered",
+      "tests": "skills/planning-steward/machine-checkable-acceptance/tests",
+      "last_evaluation": {
+        "passed": 4,
+        "total": 4,
+        "fresh_runs": 1,
+        "pass_rate": 1.0,
+        "at": "2026-06-12T09:41:18.842773Z"
+      },
+      "leakage_audit": "unrun"
     },
     {
       "skill_id": "planning-steward.behavior-test-derivation",
       "agent_role": "planning_steward",
       "path": "skills/planning-steward/behavior-test-derivation",
-      "status": "needs_tests",
-      "tests": "skills/planning-steward/behavior-test-derivation/tests"
+      "status": "registered",
+      "tests": "skills/planning-steward/behavior-test-derivation/tests",
+      "last_evaluation": {
+        "passed": 3,
+        "total": 3,
+        "fresh_runs": 1,
+        "pass_rate": 1.0,
+        "at": "2026-06-12T09:41:19.012624Z"
+      },
+      "leakage_audit": "unrun"
     },
     {
       "skill_id": "planning-steward.acceptance-test-scaffold",
       "agent_role": "planning_steward",
       "path": "skills/planning-steward/acceptance-test-scaffold",
-      "status": "needs_tests",
-      "tests": "skills/planning-steward/acceptance-test-scaffold/tests"
+      "status": "registered",
+      "tests": "skills/planning-steward/acceptance-test-scaffold/tests",
+      "last_evaluation": {
+        "passed": 5,
+        "total": 5,
+        "fresh_runs": 1,
+        "pass_rate": 1.0,
+        "at": "2026-06-12T09:41:19.179233Z"
+      },
+      "leakage_audit": "unrun"
     },
     {
       "skill_id": "planning-steward.interface-contract-spec",
       "agent_role": "planning_steward",
       "path": "skills/planning-steward/interface-contract-spec",
-      "status": "needs_tests",
-      "tests": "skills/planning-steward/interface-contract-spec/tests"
+      "status": "registered",
+      "tests": "skills/planning-steward/interface-contract-spec/tests",
+      "last_evaluation": {
+        "passed": 4,
+        "total": 4,
+        "fresh_runs": 1,
+        "pass_rate": 1.0,
+        "at": "2026-06-12T09:41:19.345671Z"
+      },
+      "leakage_audit": "unrun"
     },
     {
       "skill_id": "planning-steward.write-set-and-guards",
       "agent_role": "planning_steward",
       "path": "skills/planning-steward/write-set-and-guards",
-      "status": "needs_tests",
-      "tests": "skills/planning-steward/write-set-and-guards/tests"
+      "status": "registered",
+      "tests": "skills/planning-steward/write-set-and-guards/tests",
+      "last_evaluation": {
+        "passed": 6,
+        "total": 6,
+        "fresh_runs": 1,
+        "pass_rate": 1.0,
+        "at": "2026-06-12T09:41:19.510928Z"
+      },
+      "leakage_audit": "unrun"
     },
     {
       "skill_id": "planning-steward.documented-stub-registry",
       "agent_role": "planning_steward",
       "path": "skills/planning-steward/documented-stub-registry",
-      "status": "needs_tests",
-      "tests": "skills/planning-steward/documented-stub-registry/tests"
+      "status": "registered",
+      "tests": "skills/planning-steward/documented-stub-registry/tests",
+      "last_evaluation": {
+        "passed": 4,
+        "total": 4,
+        "fresh_runs": 1,
+        "pass_rate": 1.0,
+        "at": "2026-06-12T09:41:19.673066Z"
+      },
+      "leakage_audit": "unrun"
     },
     {
       "skill_id": "planning-steward.program-spec-assembly",
       "agent_role": "planning_steward",
       "path": "skills/planning-steward/program-spec-assembly",
-      "status": "needs_tests",
-      "tests": "skills/planning-steward/program-spec-assembly/tests"
+      "status": "registered",
+      "tests": "skills/planning-steward/program-spec-assembly/tests",
+      "last_evaluation": {
+        "passed": 5,
+        "total": 5,
+        "fresh_runs": 1,
+        "pass_rate": 1.0,
+        "at": "2026-06-12T09:41:19.836447Z"
+      },
+      "leakage_audit": "unrun"
     },
     {
       "skill_id": "shared.task-decomposition",
       "agent_role": "shared",
       "path": "skills/shared/task-decomposition",
-      "status": "needs_tests",
-      "tests": "skills/shared/task-decomposition/tests"
+      "status": "registered",
+      "tests": "skills/shared/task-decomposition/tests",
+      "last_evaluation": {
+        "passed": 6,
+        "total": 6,
+        "fresh_runs": 1,
+        "pass_rate": 1.0,
+        "at": "2026-06-12T09:41:20.001235Z"
+      },
+      "leakage_audit": "unrun"
     },
     {
       "skill_id": "developer.spec-conformance",
       "agent_role": "developer",
       "path": "skills/developer/spec-conformance",
-      "status": "needs_tests",
-      "tests": "skills/developer/spec-conformance/tests"
+      "status": "registered",
+      "tests": "skills/developer/spec-conformance/tests",
+      "last_evaluation": {
+        "passed": 4,
+        "total": 4,
+        "fresh_runs": 1,
+        "pass_rate": 1.0,
+        "at": "2026-06-12T09:41:20.159493Z"
+      },
+      "leakage_audit": "unrun"
     },
     {
       "skill_id": "developer.pre-flight-check",
       "agent_role": "developer",
       "path": "skills/developer/pre-flight-check",
-      "status": "needs_tests",
-      "tests": "skills/developer/pre-flight-check/tests"
+      "status": "registered",
+      "tests": "skills/developer/pre-flight-check/tests",
+      "last_evaluation": {
+        "passed": 6,
+        "total": 6,
+        "fresh_runs": 1,
+        "pass_rate": 1.0,
+        "at": "2026-06-12T09:41:20.322403Z"
+      },
+      "leakage_audit": "unrun"
     },
     {
       "skill_id": "shared.structured-escalation",
       "agent_role": "shared",
       "path": "skills/shared/structured-escalation",
-      "status": "needs_tests",
-      "tests": "skills/shared/structured-escalation/tests"
+      "status": "registered",
+      "tests": "skills/shared/structured-escalation/tests",
+      "last_evaluation": {
+        "passed": 5,
+        "total": 5,
+        "fresh_runs": 1,
+        "pass_rate": 1.0,
+        "at": "2026-06-12T09:41:20.488270Z"
+      },
+      "leakage_audit": "unrun"
     }
   ]
 }
