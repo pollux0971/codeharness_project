@@ -89,7 +89,39 @@ export function validatePlanningBundle(presentFiles: string[]): ValidationResult
   return { ok: missing.length === 0, errors: missing };
 }
 
-export interface StoryNode { story_id: string; depends_on: string[]; allowed_write_set: string[]; parallelism_class?: string }
+// ── STORY-020.2: Task-class-aware planning bundles ───────────────────────────
+
+export type TaskClass = 'greenfield' | 'brownfield' | 'patch';
+
+export interface PublicApiConstraint {
+  frozen_paths: string[];
+  reason: string;
+}
+
+export interface BrownfieldDelta {
+  file: string;
+  affected_symbols: string[];
+  change_intent: string;
+}
+
+export interface AmbiguityQuestion {
+  id: string;
+  text: string;
+  type: 'text' | 'choice';
+  required: boolean;
+}
+
+export interface StoryNode {
+  story_id: string;
+  depends_on: string[];
+  allowed_write_set: string[];
+  parallelism_class?: string;
+  task_class?: TaskClass;
+  public_api_constraint?: PublicApiConstraint;
+  brownfield_deltas?: BrownfieldDelta[];
+  ambiguity_questions?: AmbiguityQuestion[];
+}
+
 /** Two stories conflict for parallel run if their write-sets intersect (glob prefix check). */
 export function detectParallelismConflict(a: StoryNode, b: StoryNode): boolean {
   const norm = (g: string) => g.replace(/\*+$/, '');
@@ -99,6 +131,32 @@ export function detectParallelismConflict(a: StoryNode, b: StoryNode): boolean {
 /** Topological readiness: stories whose deps are all in `done`. */
 export function selectableStories(stories: StoryNode[], done: Set<string>): StoryNode[] {
   return stories.filter(s => s.depends_on.every(d => done.has(d)));
+}
+
+/**
+ * STORY-020.2: Emit structured ambiguity questions for brownfield stories whose
+ * deltas affect symbols that already exist in the codebase.
+ */
+export function emitAmbiguityQuestions(
+  story: StoryNode,
+  existingSymbols: string[],
+): AmbiguityQuestion[] {
+  if (story.task_class !== 'brownfield') return [];
+  const symbolSet = new Set(existingSymbols);
+  const questions: AmbiguityQuestion[] = [];
+  for (const delta of story.brownfield_deltas ?? []) {
+    for (const sym of delta.affected_symbols) {
+      if (symbolSet.has(sym)) {
+        questions.push({
+          id: `ambiguity_${sym}`,
+          text: `Is the current behavior of ${sym} intentional? The patch may change it.`,
+          type: 'text',
+          required: true,
+        });
+      }
+    }
+  }
+  return questions;
 }
 
 // ── PlanningBundle types ─────────────────────────────────────────────────────
@@ -621,6 +679,7 @@ export function buildRepairStory(opts: RepairStoryOptions): StoryNode {
     depends_on: [],
     parallelism_class: 'sequential',
     allowed_write_set: writeSet,
+    task_class: 'brownfield' as TaskClass,
   };
 }
 

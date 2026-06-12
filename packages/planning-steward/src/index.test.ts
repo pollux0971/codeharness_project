@@ -9,7 +9,8 @@ import {
   validateDefectReport, sanitizeDefectText, detectPromptInjection,
   classifyDefect, attemptReproduction, buildRepairStory, triageDefect,
   importBrownfieldRepo, validateBrownfieldIntake,
-  type DefectReport, type TestRunner,
+  emitAmbiguityQuestions,
+  type DefectReport, type TestRunner, type TaskClass,
 } from './index';
 
 describe('planning-steward (existing)', () => {
@@ -736,5 +737,74 @@ describe('brownfield-intake', () => {
                   layers: [], dependency_map: {}, conventions: {}, recovery_docs_path: '/o' };
     // missing entry_points
     expect(validateBrownfieldIntake(bad).ok).toBe(false);
+  });
+});
+
+// ── STORY-020.2: task-class-aware planning bundles ────────────────────────────
+
+function makeBrownfieldStory(withDeltas = true): StoryNode {
+  return {
+    story_id: 'STORY-BF-001',
+    depends_on: [],
+    allowed_write_set: ['src/calc.ts'],
+    parallelism_class: 'sequential',
+    task_class: 'brownfield' as TaskClass,
+    brownfield_deltas: withDeltas
+      ? [{ file: 'src/calc.ts', affected_symbols: ['calcAdd'], change_intent: 'Fix NaN' }]
+      : [],
+  };
+}
+
+function triageDefectFixture() {
+  const r = buildRepairStory({
+    report: {
+      report_id: 'r', title: 'T', what_broke: 'W', expected_behaviour: 'E',
+      actual_behaviour: 'A', artifact_version: 'abc1234', reported_at: '2026-01-01T00:00:00Z',
+    },
+    defect_class: 'regression',
+    reproduction: { status: 'confirmed', output: 'fail', run_at: '2026-01-01T00:00:00Z' },
+  });
+  return { repair_story: r };
+}
+
+describe('task-class-bundle', () => {
+  it('bundle_carries_task_class_per_story', () => {
+    const s = makeBrownfieldStory();
+    expect(s.task_class).toBe('brownfield');
+  });
+
+  it('behavior_intent_ambiguities_emitted', () => {
+    const s = makeBrownfieldStory();
+    const qs = emitAmbiguityQuestions(s, ['calcAdd', 'calcSub']);
+    expect(qs.length).toBeGreaterThan(0);
+    expect(qs[0].text).toContain('calcAdd');
+  });
+
+  it('repair_story_task_class_brownfield', () => {
+    const { repair_story } = triageDefectFixture();
+    expect(repair_story?.task_class).toBe('brownfield');
+  });
+
+  it('greenfield_task_class_exists', () => {
+    const s: StoryNode = {
+      story_id: 'X', depends_on: [], allowed_write_set: [],
+      parallelism_class: 'sequential', task_class: 'greenfield' as TaskClass,
+    };
+    expect(s.task_class).toBe('greenfield');
+  });
+
+  it('emitAmbiguityQuestions_returns_empty_for_non_brownfield', () => {
+    const s: StoryNode = {
+      story_id: 'Y', depends_on: [], allowed_write_set: [],
+      task_class: 'greenfield' as TaskClass,
+      brownfield_deltas: [{ file: 'src/a.ts', affected_symbols: ['foo'], change_intent: 'add' }],
+    };
+    expect(emitAmbiguityQuestions(s, ['foo'])).toEqual([]);
+  });
+
+  it('emitAmbiguityQuestions_only_emits_for_known_symbols', () => {
+    const s = makeBrownfieldStory();
+    const qs = emitAmbiguityQuestions(s, ['calcSub']); // calcAdd not in existingSymbols
+    expect(qs.length).toBe(0);
   });
 });

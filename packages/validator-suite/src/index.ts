@@ -225,6 +225,56 @@ export async function runIntegrationValidation(
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── STORY-020.2: Task-class bundle validation ────────────────────────────────
+
+export interface TaskClassValidationResult {
+  ok: boolean;
+  errors: string[];
+}
+
+interface BrownfieldDeltaLike { file: string; affected_symbols: string[]; change_intent: string }
+interface PublicApiConstraintLike { frozen_paths: string[]; reason: string }
+interface TaskClassBundleInput {
+  story_id: string;
+  depends_on: string[];
+  allowed_write_set: string[];
+  parallelism_class?: string;
+  task_class?: string;
+  brownfield_deltas?: BrownfieldDeltaLike[];
+  public_api_constraint?: PublicApiConstraintLike;
+}
+
+function normGlob(g: string): string {
+  return g.replace(/\*.*$/, '').replace(/\/$/, '');
+}
+
+function globsOverlap(a: string, b: string): boolean {
+  const na = normGlob(a), nb = normGlob(b);
+  return na.startsWith(nb) || nb.startsWith(na) || na === nb;
+}
+
+export function validateTaskClassBundle(story: TaskClassBundleInput): TaskClassValidationResult {
+  const errors: string[] = [];
+  if (story.task_class === 'brownfield') {
+    const deltas = story.brownfield_deltas ?? [];
+    if (deltas.length === 0) {
+      errors.push('brownfield story must declare at least one delta');
+    }
+  }
+  if (story.public_api_constraint) {
+    const { frozen_paths } = story.public_api_constraint;
+    for (const writePath of story.allowed_write_set) {
+      for (const frozenGlob of frozen_paths) {
+        if (globsOverlap(writePath, frozenGlob)) {
+          errors.push(`write-set violates public_api_constraint: ${writePath}`);
+          break;
+        }
+      }
+    }
+  }
+  return { ok: errors.length === 0, errors };
+}
+
 /**
  * STORY-009.3: Gate that validates a PlanningBundle object before backlog emission.
  * Deterministically rejects:

@@ -5,6 +5,7 @@ import {
   validatePlanningBundle, requiredPlanningBundleFiles, planningBundleValidationGate,
   runQualityBar, validateQualityBar, DEFAULT_QUALITY_BAR,
   runIntegrationValidation,
+  validateTaskClassBundle,
   type QualityBarConfig, type QualityBarRunner,
 } from './index';
 
@@ -323,5 +324,54 @@ describe('integration-validation', () => {
       async () => ({ ok: true, output: 'all pass' }));
     expect(result.ok).toBe(true);
     expect(result.command_run).toBe('pnpm test');
+  });
+});
+
+// ── STORY-020.2: task-class validation ───────────────────────────────────────
+
+describe('task-class-validation', () => {
+  it('brownfield_deltas_reference_existing_symbols', () => {
+    const story = {
+      story_id: 'X', depends_on: [], allowed_write_set: ['src/**'],
+      parallelism_class: 'sequential', task_class: 'brownfield',
+      brownfield_deltas: [],
+    };
+    const r = validateTaskClassBundle(story as any);
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(' ')).toMatch(/delta/);
+  });
+
+  it('public_api_frozen_constraint_supported', () => {
+    const story = {
+      story_id: 'X', depends_on: [], allowed_write_set: ['src/api/'],
+      parallelism_class: 'sequential', task_class: 'brownfield',
+      brownfield_deltas: [{ file: 'x', affected_symbols: ['s'], change_intent: 'c' }],
+      public_api_constraint: { frozen_paths: ['src/api/**'], reason: 'published' },
+    };
+    const r = validateTaskClassBundle(story as any);
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(' ')).toMatch(/public_api_constraint/);
+  });
+
+  it('greenfield_story_passes_without_deltas', () => {
+    const story = {
+      story_id: 'X', depends_on: [], allowed_write_set: ['src/**'],
+      parallelism_class: 'sequential', task_class: 'greenfield',
+    };
+    expect(validateTaskClassBundle(story as any).ok).toBe(true);
+  });
+
+  it('brownfield_with_deltas_and_no_constraint_passes', () => {
+    const story = {
+      story_id: 'X', depends_on: [], allowed_write_set: ['src/calc.ts'],
+      parallelism_class: 'sequential', task_class: 'brownfield',
+      brownfield_deltas: [{ file: 'src/calc.ts', affected_symbols: ['add'], change_intent: 'Fix NaN' }],
+    };
+    expect(validateTaskClassBundle(story as any).ok).toBe(true);
+  });
+
+  it('no_task_class_passes', () => {
+    const story = { story_id: 'X', depends_on: [], allowed_write_set: ['src/**'], parallelism_class: 'sequential' };
+    expect(validateTaskClassBundle(story as any).ok).toBe(true);
   });
 });
