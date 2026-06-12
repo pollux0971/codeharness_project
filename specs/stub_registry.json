@@ -7,11 +7,6 @@
   ],
   "stubs": [
     {
-      "symbol": "<module>",
-      "file": "codegraph-adapter/src/index.ts",
-      "owner": "ROADMAP:phase-2"
-    },
-    {
       "symbol": "applySlidingWindow",
       "file": "context-manager/src/index.ts",
       "owner": "ROADMAP:phase-2"
