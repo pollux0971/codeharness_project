@@ -12,7 +12,7 @@
 import { describe, it, expect } from 'vitest';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { unlinkSync } from 'fs';
+import { unlinkSync, existsSync } from 'fs';
 import {
   canTransition,
   tick,
@@ -21,11 +21,15 @@ import {
   enforceRunBudget,
   loadOrInitProjectRunState,
   persistProjectRunState,
+  buildReviewSummary,
+  recordReviewDecision,
   type HarnessState,
   type StoryRecord,
   type RunBudget,
   type TickInput,
+  type ProjectRunState,
 } from './index.js';
+import { readJsonl } from '@codeharness/event-log';
 
 const tmpPath = () => join(tmpdir(), `prs_test_${Date.now()}_${Math.floor(Math.random() * 1e6)}.json`);
 
@@ -473,5 +477,88 @@ describe('project-run-state', () => {
     const after = JSON.parse(require('fs').readFileSync(p, 'utf8')).updated_at;
     expect(after >= before).toBe(true);
     unlinkSync(p);
+  });
+});
+
+// ── review-cli domain (STORY-012.2) ───────────────────────────────────────────
+
+function makeCheckpointedRunState(): ProjectRunState {
+  return {
+    schema_version: 1, project_id: 'proj-review', run_id: 'run-rev-1',
+    created_at: '', updated_at: '', current_story: null, last_decision: null,
+    iterations_used: 2, run_iteration_budget: 10,
+    stories: [
+      { story_id: 'STORY-A', status: 'done', attempts: 1, attempt_budget: 3,
+        checkpoint_sha: 'sha-a', last_action: null, last_result: null, blocked_reason: null },
+      { story_id: 'STORY-B', status: 'done', attempts: 1, attempt_budget: 3,
+        checkpoint_sha: 'sha-b', last_action: null, last_result: null, blocked_reason: null },
+    ],
+  };
+}
+
+const tmpTrace = () => join(tmpdir(), `review-trace-${Date.now()}-${Math.floor(Math.random() * 1e6)}.jsonl`);
+
+describe('review-cli-domain', () => {
+  it('approve_required_before_promotion', () => {
+    const trace = tmpTrace();
+    const decision = recordReviewDecision(
+      { runId: 'run-rev-1', projectId: 'proj-review',
+        runState: makeCheckpointedRunState(), traceLogPath: trace },
+      'approved', ''
+    );
+    expect(decision.outcome).toBe('approved');
+    expect(decision.reason).toBe('operator approved');
+    if (existsSync(trace)) unlinkSync(trace);
+  });
+
+  it('deny_records_reason_and_blocks', () => {
+    const trace = tmpTrace();
+    const decision = recordReviewDecision(
+      { runId: 'run-rev-1', projectId: 'proj-review',
+        runState: makeCheckpointedRunState(), traceLogPath: trace },
+      'denied', 'needs more tests'
+    );
+    expect(decision.outcome).toBe('denied');
+    expect(decision.reason).toBe('needs more tests');
+    if (existsSync(trace)) unlinkSync(trace);
+  });
+
+  it('deny_without_reason_throws', () => {
+    const trace = tmpTrace();
+    expect(() => recordReviewDecision(
+      { runId: 'r', projectId: 'p', runState: makeCheckpointedRunState(), traceLogPath: trace },
+      'denied', ''
+    )).toThrow(/deny requires a reason/);
+  });
+
+  it('review_summary_shows_diff_and_validation_evidence', () => {
+    const summary = buildReviewSummary(makeCheckpointedRunState());
+    expect(summary.total_stories).toBe(2);
+    expect(summary.done_count).toBe(2);
+    expect(summary.promotable).toBe(true);
+    expect(summary.all_checkpointed).toBe(true);
+    expect(summary.validation_evidence.map(e => e.story_id)).toEqual(['STORY-A', 'STORY-B']);
+  });
+
+  it('summary_not_promotable_when_incomplete', () => {
+    const partial = makeCheckpointedRunState();
+    partial.stories[1].status = 'in_progress';
+    partial.stories[1].checkpoint_sha = null;
+    const summary = buildReviewSummary(partial);
+    expect(summary.promotable).toBe(false);
+    expect(summary.all_checkpointed).toBe(false);
+  });
+
+  it('review_decision_written_to_trace', () => {
+    const trace = tmpTrace();
+    recordReviewDecision(
+      { runId: 'run-rev-1', projectId: 'proj-review',
+        runState: makeCheckpointedRunState(), traceLogPath: trace },
+      'approved', 'lgtm'
+    );
+    const events = readJsonl(trace);
+    expect(events.length).toBe(1);
+    expect(events[0].type).toBe('human_review');
+    if (existsSync(trace)) unlinkSync(trace);
   });
 });

@@ -297,6 +297,90 @@ export async function persistProjectRunState(
   renameSync(tmp, filePath);
 }
 
+// ── Human review domain (STORY-012.2) ────────────────────────────────────────
+
+import crypto from 'node:crypto';
+import { createTraceEvent, appendJsonl, readJsonl } from '@codeharness/event-log';
+
+export type ReviewOutcome = 'approved' | 'denied';
+
+export interface ReviewDecision {
+  decision_id: string;
+  run_id: string;
+  project_id: string;
+  outcome: ReviewOutcome;
+  reason: string;
+  decided_at: string;
+  validation_evidence: { story_id: string; checkpoint_sha: string }[];
+  trace_event_id: string;
+}
+
+export interface ReviewContext {
+  runId: string;
+  projectId: string;
+  runState: ProjectRunState;
+  traceLogPath: string;
+}
+
+export interface ReviewSummary {
+  project_id: string;
+  run_id: string;
+  total_stories: number;
+  done_count: number;
+  all_checkpointed: boolean;
+  validation_evidence: { story_id: string; checkpoint_sha: string | null }[];
+  promotable: boolean;
+}
+
+export function buildReviewSummary(runState: ProjectRunState): ReviewSummary {
+  const stories = runState.stories;
+  const done_count = stories.filter(s => s.status === 'done').length;
+  const all_checkpointed = stories.every(s => s.checkpoint_sha !== null);
+  return {
+    project_id: runState.project_id,
+    run_id: runState.run_id,
+    total_stories: stories.length,
+    done_count,
+    all_checkpointed,
+    validation_evidence: stories.map(s => ({ story_id: s.story_id, checkpoint_sha: s.checkpoint_sha })),
+    promotable: done_count === stories.length && all_checkpointed,
+  };
+}
+
+export function recordReviewDecision(
+  ctx: ReviewContext,
+  outcome: ReviewOutcome,
+  reason: string
+): ReviewDecision {
+  if (outcome === 'denied' && !reason) {
+    throw new Error('deny requires a reason');
+  }
+  const resolvedReason = reason || 'operator approved';
+  const existing = readJsonl(ctx.traceLogPath);
+  const last = existing[existing.length - 1];
+  const traceEvent = createTraceEvent({
+    run_id: ctx.runId,
+    seq: last ? last.seq + 1 : 0,
+    previous_event_hash: last ? (last.hash ?? null) : null,
+    type: 'human_review',
+    payload: { outcome, reason: resolvedReason, run_id: ctx.runId, project_id: ctx.projectId },
+  });
+  appendJsonl(ctx.traceLogPath, traceEvent);
+  const validation_evidence = ctx.runState.stories
+    .filter(s => s.checkpoint_sha !== null)
+    .map(s => ({ story_id: s.story_id, checkpoint_sha: s.checkpoint_sha as string }));
+  return {
+    decision_id: crypto.randomUUID(),
+    run_id: ctx.runId,
+    project_id: ctx.projectId,
+    outcome,
+    reason: resolvedReason,
+    decided_at: new Date().toISOString(),
+    validation_evidence,
+    trace_event_id: traceEvent.event_id,
+  };
+}
+
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
 /** Minimal glob matcher (supports ** and * wildcards). */
