@@ -3,6 +3,7 @@ import { TraceViewer } from './TraceViewer';
 import { ApprovalQueue } from './ApprovalQueue';
 import { ApprovalCenter, type EscalationData } from './ApprovalCenter';
 import { PipelineBoard } from './PipelineBoard';
+import { IdeaIntake } from './IdeaIntake';
 import { MOCK_TRACE_EVENTS } from './mockTrace';
 
 const API = (import.meta as any).env?.VITE_API ?? 'http://127.0.0.1:8787';
@@ -52,6 +53,8 @@ export function App() {
           </span>
         )}
       </header>
+      {/* Idea intake form — collapsed behind toggle */}
+      <IdeaIntakeToggle />
       {/* Pipeline board — story cards over state-machine lanes */}
       <div style={{ padding: '0 22px', borderBottom: '1px solid rgba(230,237,243,.1)' }}>
         <Group t="Pipeline board" />
@@ -144,3 +147,22 @@ const Placeholder = ({ label }: { label: string }) => (
     — {label} placeholder —
   </div>
 );
+function IdeaIntakeToggle() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ padding: '10px 22px', borderBottom: '1px solid rgba(230,237,243,.1)' }}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        style={{ background: 'none', border: '1px solid rgba(91,214,192,.4)', borderRadius: 6, color: '#5BD6C0', padding: '4px 12px', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, cursor: 'pointer' }}
+      >
+        {open ? '✕ Close' : '＋ New idea'}
+      </button>
+      {open && (
+        <div style={{ marginTop: 12 }}>
+          <IdeaIntake onIdeaSubmit={idea => console.log('[idea]', idea)} />
+        </div>
+      )}
+    </div>
+  );
+}
