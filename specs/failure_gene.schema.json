@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "FailureGene",
-  "description": "A compact, control-oriented record of a validated failure pattern. Produced by the Debugger after a repair succeeds, stored in the warning bank, and injected (AVOID-only) into the Developer's context before high-risk turns. Inspired by GEP (Strategy Genes) and Evolver: keep it ~100 tokens, AVOID is the operative field. Selective, not additive \u2014 dedupe by matching_signal.",
+  "description": "A compact, control-oriented record of a validated failure pattern. Produced by the Debugger after a repair succeeds, stored in the warning bank, and injected (AVOID-only) into the Developer's context before high-risk turns. Inspired by GEP (Strategy Genes) and Evolver: keep it ~100 tokens, AVOID is the operative field. Selective, not additive — dedupe by matching_signal.",
   "type": "object",
   "required": [
     "id",
@@ -23,7 +23,7 @@
     },
     "matching_signal": {
       "type": "string",
-      "description": "Lightweight match spec used for deduplication and injection filtering. Pipe-separated key:value tokens \u2014 ANY token match is a hit. e.g. 'file:src/core/** | error:circular_import | task:refactor'"
+      "description": "Lightweight match spec used for deduplication and injection filtering. Pipe-separated key:value tokens — ANY token match is a hit. e.g. 'file:src/core/** | error:circular_import | task:refactor'"
     },
     "summary": {
       "type": "string",
@@ -38,7 +38,7 @@
     "avoid": {
       "type": "string",
       "maxLength": 200,
-      "description": "THE operative field injected into Developer context. Imperative, \u226440 words. 'Do NOT X' or 'NEVER Y without Z'. This is what the model sees \u2014 keep it compact and specific."
+      "description": "THE operative field injected into Developer context. Imperative, ≤40 words. 'Do NOT X' or 'NEVER Y without Z'. This is what the model sees — keep it compact and specific."
     },
     "failure_type": {
       "enum": [
@@ -88,7 +88,7 @@
     "version": {
       "type": "integer",
       "minimum": 1,
-      "description": "Bump on each consolidation or manual edit. The schema is editable \u2014 do not grow it, revise it."
+      "description": "Bump on each consolidation or manual edit. The schema is editable — do not grow it, revise it."
     },
     "created_at": {
       "type": "string",
@@ -98,7 +98,7 @@
       "type": "integer",
       "minimum": 1,
       "default": 1,
-      "description": "How many distinct failure events have been merged into this gene. consolidated_count >= 2 means it is a recurring pattern \u2014 escalate earlier."
+      "description": "How many distinct failure events have been merged into this gene. consolidated_count >= 2 means it is a recurring pattern — escalate earlier."
     },
     "resolved_at": {
       "type": [
@@ -135,6 +135,48 @@
         { "type": "string", "maxLength": 200 },
         { "type": "null" }
       ]
+    },
+    "emitted_by": {
+      "type": "string",
+      "enum": ["debugger"],
+      "description": "Only the Debugger may emit a gene. If absent, gene is considered invalid."
+    },
+    "emitted_after_validator_failure": {
+      "type": "boolean",
+      "description": "Must be true — gene is only valid after a validator failure."
+    },
+    "referenced_test_name": {
+      "type": ["string", "null"],
+      "description": "The specific failing test name that produced this gene."
+    },
+    "symptom_classification": {
+      "type": "string",
+      "enum": [
+        "assertion_mismatch",
+        "type_error",
+        "build_failure",
+        "runtime_crash",
+        "timeout",
+        "scope_violation",
+        "unknown"
+      ],
+      "description": "Structured symptom — not free text."
+    },
+    "quarantine_status": {
+      "type": ["object", "null"],
+      "properties": {
+        "quarantined": { "type": "boolean" },
+        "quarantine_reason": { "type": ["string", "null"] },
+        "quarantined_at": { "type": ["string", "null"], "format": "date-time" },
+        "revalidation_required_by": {
+          "enum": ["human", "passing_story", null]
+        }
+      }
+    },
+    "regression_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "How many times the paired remedy caused a regression. Triggers quarantine when >= 2."
     }
   },
   "examples": [
@@ -153,7 +195,13 @@
       "created_at": "2026-06-07T10:00:00Z",
       "consolidated_count": 1,
       "resolved_at": null,
-      "status": "active"
+      "status": "active",
+      "emitted_by": "debugger",
+      "emitted_after_validator_failure": true,
+      "referenced_test_name": null,
+      "symptom_classification": "build_failure",
+      "regression_count": 0,
+      "quarantine_status": null
     }
   ]
 }
