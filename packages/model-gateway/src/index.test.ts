@@ -16,6 +16,7 @@ import {
   createApiKeyProvider,
   validateApiKey,
   buildValidatedProviderMetadata,
+  bootstrapLiveProviders,
   createScriptedProvider,
   guardedCall,
   ProviderRegistry,
@@ -251,6 +252,53 @@ describe('api-key-auth (STORY-028.1)', () => {
     const r = await callProvider(p, req);
     expect(r.ok).toBe(false);
     expect(r.errors.join(' ')).not.toContain(SECRET);
+  });
+});
+
+describe('live-provider-bootstrap (STORY-028.2)', () => {
+  const handle: TypedSecretHandle = { handle_id: 'provider.openai.default', handle_type: 'api_key', provider: 'openai' };
+  const bootCfg = [{ provider_id: 'openai', handle, base_url: 'https://api.openai.com/v1' }];
+  const okHttp: RealProviderHttpClient = async () => ({
+    ok: true, status: 200,
+    json: async () => ({ choices: [{ message: { content: JSON.stringify(goodDeveloperOutput) } }], usage: {} }),
+  });
+
+  it('createRealProvider_called_on_boot_when_gated_on_and_live_adapter_registered', async () => {
+    const registry = new ProviderRegistry();
+    const result = bootstrapLiveProviders({ enabled: true, providers: bootCfg, registry, resolveSecret: async () => 'sk-SECRET', httpClient: okHttp });
+    expect(result.gated_off).toBe(false);
+    expect(result.registered.map(r => r.provider_id)).toEqual(['openai']);
+    expect(registry.has('openai')).toBe(true);                  // live_adapter_registered_in_gateway
+    // and the registered adapter actually routes a call through the gateway
+    const r = await callProvider(registry.get('openai'), req);
+    expect(r.ok).toBe(true);
+  });
+
+  it('bootstrap_idempotent', () => {
+    const registry = new ProviderRegistry();
+    const first = bootstrapLiveProviders({ enabled: true, providers: bootCfg, registry, resolveSecret: async () => 'sk-SECRET', httpClient: okHttp });
+    const second = bootstrapLiveProviders({ enabled: true, providers: bootCfg, registry, resolveSecret: async () => 'sk-SECRET', httpClient: okHttp });
+    expect(first.registered).toHaveLength(1);
+    expect(second.registered).toHaveLength(0);                  // no double-register
+    expect(second.already_registered).toEqual(['openai']);
+    expect(registry.list().filter(p => p.id === 'openai')).toHaveLength(1);
+  });
+
+  it('noop_when_gate_closed_ci_safe', async () => {
+    const registry = new ProviderRegistry();
+    let resolverCalled = false;
+    const result = bootstrapLiveProviders({ enabled: false, providers: bootCfg, registry, resolveSecret: async () => { resolverCalled = true; return 'sk-SECRET'; }, httpClient: okHttp });
+    expect(result.gated_off).toBe(true);
+    expect(result.registered).toHaveLength(0);
+    expect(registry.has('openai')).toBe(false);                 // nothing built
+    expect(resolverCalled).toBe(false);                         // no secret access when gated off
+  });
+
+  it('registration_record_carries_handle_reference_not_secret', () => {
+    const registry = new ProviderRegistry();
+    const result = bootstrapLiveProviders({ enabled: true, providers: bootCfg, registry, resolveSecret: async () => 'sk-SECRET', httpClient: okHttp });
+    expect(JSON.stringify(result.registered)).not.toContain('sk-SECRET');
+    expect(result.registered[0]).toMatchObject({ provider_id: 'openai', provider: 'openai', handle_id: 'provider.openai.default' });
   });
 });
 

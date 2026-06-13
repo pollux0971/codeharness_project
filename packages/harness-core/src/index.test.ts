@@ -28,6 +28,7 @@ import {
   sendNotification,
   enrichBrownfieldStory,
   recordResolvedSettings,
+  recordProviderRegistrations,
   classifyConsoleMessage,
   routeConsoleMessage,
   applyBacklogDelta,
@@ -904,6 +905,42 @@ describe('gate-sla', () => {
     await evaluateGateSla({ gate_type: 'hold_release', timeout_seconds: 60, escalation_policy: 're_notify' }, 30, t);
     const events = readJsonl(t);
     expect(events[0].type).toBe('gate_sla_tick');
+    if (existsSync(t)) unlinkSync(t);
+  });
+});
+
+describe('provider-registration-trace (STORY-028.2)', () => {
+  const tmpBootTrace = () => join(tmpdir(), `gateway-boot-${Date.now()}-${Math.floor(Math.random() * 1e6)}.jsonl`);
+
+  it('registration_event_in_trace_no_secret', async () => {
+    const t = tmpBootTrace();
+    const n = await recordProviderRegistrations(
+      [{ provider_id: 'openai', provider: 'openai', base_url: 'https://api.openai.com/v1', handle_id: 'provider.openai.default' }],
+      t,
+    );
+    expect(n).toBe(1);
+    const events = readJsonl(t);
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe('provider_registered');
+    expect(events[0].payload).toEqual({
+      provider_id: 'openai', provider: 'openai', base_url: 'https://api.openai.com/v1', handle_id: 'provider.openai.default',
+    });
+    // No credential value can be present: the whole serialized trace carries only the handle reference.
+    const raw = JSON.stringify(events);
+    expect(raw).not.toMatch(/sk-/);
+    expect(raw).toContain('provider.openai.default');
+    if (existsSync(t)) unlinkSync(t);
+  });
+
+  it('appends_chained_events_for_multiple_registrations', async () => {
+    const t = tmpBootTrace();
+    await recordProviderRegistrations([
+      { provider_id: 'openai', provider: 'openai', base_url: 'https://api.openai.com/v1', handle_id: 'provider.openai.default' },
+      { provider_id: 'deepseek', provider: 'deepseek', base_url: 'https://api.deepseek.com', handle_id: 'provider.deepseek.default' },
+    ], t);
+    const events = readJsonl(t);
+    expect(events.map(e => e.seq)).toEqual([0, 1]);
+    expect(events[1].previous_event_hash).toBe(events[0].hash);
     if (existsSync(t)) unlinkSync(t);
   });
 });

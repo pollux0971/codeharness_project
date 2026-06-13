@@ -172,6 +172,9 @@ export class ProviderRegistry {
     if (!p) throw new Error(`unknown provider: ${id}`);
     return p;
   }
+  has(id: string): boolean {
+    return this.providers.has(id);
+  }
   list(): { id: string; kind: ProviderKind }[] {
     return [...this.providers.values()].map(p => ({ id: p.id, kind: p.kind }));
   }
@@ -360,6 +363,72 @@ export function buildValidatedProviderMetadata(
     validated_at: validatedAt,
     models_available: validation.models_available,
   };
+}
+
+// ── Live provider bootstrap (STORY-028.2) ───────────────────────────────────
+// Build and register the live adapter on boot. Until this runs, an open
+// real_api_calls gate has NO effect — createRealProvider/createApiKeyProvider is
+// defined but nothing calls it (the exact field gap EPIC-028 closes). The
+// bootstrap is idempotent and a no-op when the gate is closed (CI-safe). It
+// returns only non-secret registration metadata for the trace.
+
+export interface ProviderBootConfig {
+  provider_id: string;        // registry id, e.g. 'openai'
+  handle: TypedSecretHandle;  // typed reference; resolved by the broker at call time
+  base_url: string;           // OpenAI-compatible base
+}
+
+/** Non-secret record of a live adapter being registered. Carries the handle
+ *  reference only — never the resolved key. Safe to write to the trace. */
+export interface ProviderRegistrationRecord {
+  provider_id: string;
+  provider: string;
+  base_url: string;
+  handle_id: string;
+}
+
+export interface BootstrapLiveProvidersOptions {
+  enabled: boolean;                  // the real_api_calls gate
+  providers: ProviderBootConfig[];   // validated providers to bring online
+  registry: ProviderRegistry;
+  resolveSecret: SecretResolver;
+  httpClient?: RealProviderHttpClient;
+}
+
+export interface BootstrapResult {
+  gated_off: boolean;                       // true → gate closed, nothing built (CI-safe)
+  registered: ProviderRegistrationRecord[]; // adapters newly built+registered this call
+  already_registered: string[];             // provider_ids skipped (idempotent re-run)
+}
+
+export function bootstrapLiveProviders(opts: BootstrapLiveProvidersOptions): BootstrapResult {
+  if (!opts.enabled) {
+    return { gated_off: true, registered: [], already_registered: [] };
+  }
+  const registered: ProviderRegistrationRecord[] = [];
+  const already: string[] = [];
+  for (const cfg of opts.providers) {
+    if (opts.registry.has(cfg.provider_id)) {
+      already.push(cfg.provider_id);       // idempotent: never double-register
+      continue;
+    }
+    const adapter = createApiKeyProvider({
+      id: cfg.provider_id,
+      handle: cfg.handle,
+      resolveSecret: opts.resolveSecret,
+      baseUrl: cfg.base_url,
+      httpClient: opts.httpClient,
+      enabled: true,
+    });
+    opts.registry.register(adapter);
+    registered.push({
+      provider_id: cfg.provider_id,
+      provider: cfg.handle.provider,
+      base_url: cfg.base_url,
+      handle_id: cfg.handle.handle_id,
+    });
+  }
+  return { gated_off: false, registered, already_registered: already };
 }
 
 export interface ModelRef {

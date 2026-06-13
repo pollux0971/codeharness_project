@@ -604,6 +604,45 @@ export async function recordResolvedSettings(
   appendJsonl(traceLogPath, event);
 }
 
+// ── STORY-028.2: Live provider bootstrap — registration trace recording ──────
+// Appends a non-secret `provider_registered` event per live adapter built at
+// boot. The input carries handle references only; combined with createTraceEvent's
+// redaction, no secret value can reach the append-only trace. Structurally typed
+// so the gateway's BootstrapResult.registered can be passed directly without a
+// package dependency on the gateway.
+
+export interface ProviderRegistrationRecord {
+  provider_id: string;
+  provider: string;
+  base_url: string;
+  handle_id: string;
+}
+
+export async function recordProviderRegistrations(
+  registrations: ProviderRegistrationRecord[],
+  traceLogPath: string
+): Promise<number> {
+  const existing = readJsonl(traceLogPath);
+  for (const r of registrations) {
+    const last = existing[existing.length - 1];
+    const event = createTraceEvent({
+      run_id: 'gateway-boot',
+      seq: last ? last.seq + 1 : 0,
+      previous_event_hash: last ? (last.hash ?? null) : null,
+      type: 'provider_registered',
+      payload: {
+        provider_id: r.provider_id,
+        provider: r.provider,
+        base_url: r.base_url,
+        handle_id: r.handle_id,
+      },
+    });
+    appendJsonl(traceLogPath, event);
+    existing.push(event);
+  }
+  return registrations.length;
+}
+
 export async function sendNotification(
   payload: NotificationPayload,
   config: NotificationConfig,
