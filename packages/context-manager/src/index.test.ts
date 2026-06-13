@@ -8,6 +8,7 @@ import {
   extractProjectProfile, injectProjectProfile,
   compactContextWindow, DEFAULT_CONFIG,
   buildModeAwarePacket, assertDocWriteSafe,
+  buildReviewerContextPacket, assertReviewerContextClean, REVIEWER_DENIED_SECTIONS,
   ArtifactRef, PhaseSignals, LifecyclePhase, ContextWindow, Turn,
 } from './index';
 import type { FullSkillManifest } from '@codeharness/skill-runtime';
@@ -476,5 +477,53 @@ describe('mode-aware-docs', () => {
 
   it('write_safe_passes_for_allowed_path', () => {
     expect(() => assertDocWriteSafe('src/README.md', ['src/**'])).not.toThrow();
+  });
+});
+
+// ── STORY-022.3: reviewer-context ─────────────────────────────────────────────
+
+describe('reviewer-context', () => {
+  const input = {
+    story_id: 'STORY-X',
+    failing_test_output: 'AssertionError: expected 5 but received NaN',
+    acceptance_criteria: 'divide(10, 2) === 5',
+    diff_under_review: '-export const divide = (a, b) => a / b;',
+    matching_genes: [{ matching_signal: 'src:calc|type:runtime_error', summary: 'crash on zero' }],
+    story_objective: 'Fix division',
+    allowed_write_set: ['src/**'],
+  };
+
+  it('reviewer_context_grants_failing_output', () => {
+    const packet = buildReviewerContextPacket(input);
+    expect(packet.sections.some(s => s.name === 'failing_test_output')).toBe(true);
+  });
+
+  it('reviewer_context_grants_acceptance_and_diff', () => {
+    const packet = buildReviewerContextPacket(input);
+    expect(packet.sections.some(s => s.name === 'acceptance_criteria')).toBe(true);
+    expect(packet.sections.some(s => s.name === 'diff_under_review')).toBe(true);
+  });
+
+  it('reviewer_context_denies_implementation_history', () => {
+    const packet = buildReviewerContextPacket(input);
+    expect(packet.sections.some(s => s.name === 'implementation_history')).toBe(false);
+  });
+
+  it('reviewer_context_denies_agent_reasoning', () => {
+    const packet = buildReviewerContextPacket(input);
+    expect(packet.sections.some(s => s.name === 'agent_reasoning')).toBe(false);
+  });
+
+  it('reviewer_write_set_read_only_labelled', () => {
+    const packet = buildReviewerContextPacket(input);
+    const ws = packet.sections.find(s => s.name === 'write_set_scope');
+    expect(ws?.text ?? ws?.ref ?? '').toContain('SCOPE REFERENCE ONLY');
+  });
+
+  it('assert_reviewer_context_clean_catches_violation', () => {
+    const dirty = buildReviewerContextPacket(input);
+    dirty.sections.push({ name: 'implementation_history', ref: 'impl', text: 'Developer tried X', tokenCount: 5, priority: 3 });
+    const violations = assertReviewerContextClean(dirty);
+    expect(violations).toContain('implementation_history');
   });
 });

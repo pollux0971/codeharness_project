@@ -1,6 +1,6 @@
 export interface SkillPackageManifest {
   skill_id: string;
-  agent_role: 'planning_steward' | 'supervisor' | 'developer' | 'debugger';
+  agent_role: 'planning_steward' | 'supervisor' | 'developer' | 'debugger' | 'reviewer';
   path: string;
 }
 
@@ -13,7 +13,7 @@ import path from 'node:path';
 
 export interface FullSkillManifest {
   skill_id: string;
-  agent_role: 'planning_steward' | 'supervisor' | 'developer' | 'debugger';
+  agent_role: 'planning_steward' | 'supervisor' | 'developer' | 'debugger' | 'reviewer';
   path: string;
   description?: string;
   version?: number;

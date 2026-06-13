@@ -5,7 +5,7 @@
  */
 
 // ── agent / idea primitives ───────────────────────────────────────────────────
-export type AgentRole = 'planning_steward' | 'supervisor' | 'developer' | 'debugger';
+export type AgentRole = 'planning_steward' | 'supervisor' | 'developer' | 'debugger' | 'reviewer';
 export type IdeaMode = 'greenfield' | 'brownfield' | 'patch' | 'checkpoint' | 'research_spike';
 export type TaskClass = IdeaMode;
 export type PermissionDecision = 'allow' | 'ask' | 'deny';

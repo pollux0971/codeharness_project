@@ -68,7 +68,7 @@ export const DEFAULT_CONFIG: ContextManagerConfig = {
   slidingWindowMaxTurns: 20,
   reInjectContractEveryNCalls: 10,
   reInjectRulesEveryNCalls: 20,
-  budgets: { planning_steward: 32000, supervisor: 16000, developer: 128000, debugger: 32000 },
+  budgets: { planning_steward: 32000, supervisor: 16000, developer: 128000, debugger: 32000, reviewer: 16000 },
 };
 
 // ── Strategy routing (AgentSwing) ─────────────────────────────────────────────
@@ -162,6 +162,7 @@ export function requiredContextSections(role: AgentRole): string[] {
     case 'supervisor':       return ['project_status','story_goal','codegraph_summary','invariants'];
     case 'developer':        return ['story_contract','relevant_files','allowed_write_set','validation_commands','failure_genes'];
     case 'debugger':         return ['failed_logs','current_patch','affected_codegraph','debug_attempts','matching_failure_genes'];
+    case 'reviewer':         return ['failing_test_output','acceptance_criteria','diff_under_review','gene_signals'];
   }
 }
 
@@ -488,6 +489,91 @@ export function assertDocWriteSafe(
   if (!safe) {
     throw new Error('doc_write_blocked: path not in write-set');
   }
+}
+
+// ── STORY-022.3: role-scoped context profile for Reviewer ────────────────────
+
+export const REVIEWER_DENIED_SECTIONS = [
+  'implementation_history',
+  'agent_reasoning',
+  'rejected_approach_rationale',
+] as const;
+
+export type ReviewerDeniedSection = typeof REVIEWER_DENIED_SECTIONS[number];
+
+export interface ReviewerContextInput {
+  story_id: string;
+  failing_test_output: string;
+  acceptance_criteria: string;
+  diff_under_review: string;
+  matching_genes: { matching_signal: string; summary: string }[];
+  story_objective?: string;
+  allowed_write_set?: string[];
+}
+
+export function buildReviewerContextPacket(input: ReviewerContextInput): RoleContextPacket {
+  const sections: ArtifactRef[] = [];
+
+  sections.push({
+    name: 'failing_test_output',
+    ref: `story:${input.story_id}:failing_test_output`,
+    text: input.failing_test_output,
+    tokenCount: Math.ceil(input.failing_test_output.length / 4),
+    priority: 3,
+  });
+
+  sections.push({
+    name: 'acceptance_criteria',
+    ref: `story:${input.story_id}:acceptance_criteria`,
+    text: input.acceptance_criteria,
+    tokenCount: Math.ceil(input.acceptance_criteria.length / 4),
+    priority: 3,
+  });
+
+  sections.push({
+    name: 'diff_under_review',
+    ref: `story:${input.story_id}:diff_under_review`,
+    text: input.diff_under_review,
+    tokenCount: Math.ceil(input.diff_under_review.length / 4),
+    priority: 3,
+  });
+
+  const geneText = input.matching_genes.map(g => g.matching_signal).join('\n');
+  sections.push({
+    name: 'gene_signals',
+    ref: `story:${input.story_id}:gene_signals`,
+    text: geneText,
+    tokenCount: Math.ceil(geneText.length / 4),
+    priority: 3,
+  });
+
+  if (input.story_objective !== undefined) {
+    sections.push({
+      name: 'story_objective',
+      ref: `story:${input.story_id}:story_objective`,
+      text: input.story_objective,
+      tokenCount: Math.ceil(input.story_objective.length / 4),
+      priority: 3,
+    });
+  }
+
+  if (input.allowed_write_set !== undefined && input.allowed_write_set.length > 0) {
+    const wsText = `FOR SCOPE REFERENCE ONLY — reviewer holds no write-set\n${input.allowed_write_set.join('\n')}`;
+    sections.push({
+      name: 'write_set_scope',
+      ref: `story:${input.story_id}:write_set_scope`,
+      text: wsText,
+      tokenCount: Math.ceil(wsText.length / 4),
+      priority: 3,
+    });
+  }
+
+  return { role: 'reviewer', sections, excluded: [] };
+}
+
+export function assertReviewerContextClean(packet: RoleContextPacket): string[] {
+  const denied = new Set<string>(REVIEWER_DENIED_SECTIONS);
+  return packet.sections.filter(s => denied.has(s.name as ReviewerDeniedSection)).map(s => s.name);
 }
 
 // ── STORY-014.6: role-scoped skill injection ──────────────────────────────────
