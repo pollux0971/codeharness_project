@@ -30,6 +30,7 @@ import {
   recordResolvedSettings,
   classifyConsoleMessage,
   routeConsoleMessage,
+  applyBacklogDelta,
   type HarnessState,
   type StoryRecord,
   type RunBudget,
@@ -39,6 +40,8 @@ import {
   type NotificationPayload,
   type NotificationHttpClient,
   type BrownfieldCodeGraphClient,
+  type BacklogTransaction,
+  type BacklogDeltaInput,
 } from './index.js';
 import { readJsonl } from '@codeharness/event-log';
 import { DEFAULT_SETTINGS } from '@codeharness/settings';
@@ -784,5 +787,32 @@ describe('console-router', () => {
 
   it('scope_change_request_classified', () => {
     expect(classifyConsoleMessage('add a new story for caching').intent).toBe('scope_change_request');
+  });
+});
+
+// ── STORY-023.3: Backlog delta transaction ────────────────────────────────────
+
+const validDelta: BacklogDeltaInput = {
+  new_stories: [{ story_id: 'STORY-NEW-001' }],
+  epic_list_additions: ['EPIC-SC-greenfield'],
+  source_message: 'add caching',
+  validated: true,
+  validation_errors: [],
+};
+
+describe('backlog-transaction', () => {
+  it('delta_lands_as_tracker_transaction', async () => {
+    const t = join(tmpdir(), `bt-${Date.now()}.jsonl`);
+    const tx: BacklogTransaction = await applyBacklogDelta(validDelta, t);
+    expect(tx.added_story_ids).toContain('STORY-NEW-001');
+    if (existsSync(t)) unlinkSync(t);
+  });
+
+  it('backlog_updated_event_emitted', async () => {
+    const t = join(tmpdir(), `bt-${Date.now()}.jsonl`);
+    await applyBacklogDelta(validDelta, t);
+    const events = readJsonl(t);
+    expect(events[0].type).toBe('backlog_updated');
+    if (existsSync(t)) unlinkSync(t);
   });
 });

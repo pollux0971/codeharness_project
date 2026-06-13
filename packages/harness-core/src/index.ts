@@ -646,6 +646,49 @@ export async function sendNotification(
   return { ok: false, channel: 'none', error: 'unknown channel type' };
 }
 
+// ── STORY-023.3: Backlog delta transaction ────────────────────────────────────
+
+/** Structural subset of BacklogDelta — avoids a harness-core→planning-steward reference. */
+export interface BacklogDeltaInput {
+  new_stories: Array<{ story_id: string }>;
+  epic_list_additions: string[];
+  source_message: string;
+  validated: boolean;
+  validation_errors: string[];
+}
+
+export interface BacklogTransaction {
+  added_story_ids: string[];
+  epic_list_additions: string[];
+  transaction_at: string;
+}
+
+export async function applyBacklogDelta(
+  delta: BacklogDeltaInput,
+  traceLogPath: string,
+): Promise<BacklogTransaction> {
+  if (!delta.validated) {
+    throw new Error('backlog_delta_rejected: validation failed');
+  }
+
+  const added_story_ids = delta.new_stories.map(s => s.story_id);
+  const epic_list_additions = delta.epic_list_additions;
+  const transaction_at = new Date().toISOString();
+
+  const existing = readJsonl(traceLogPath);
+  const last = existing[existing.length - 1];
+  const event = createTraceEvent({
+    run_id: 'backlog-update',
+    seq: last ? last.seq + 1 : 0,
+    previous_event_hash: last ? (last.hash ?? null) : null,
+    type: 'backlog_updated',
+    payload: { added_story_ids, epic_list_additions },
+  });
+  appendJsonl(traceLogPath, event);
+
+  return { added_story_ids, epic_list_additions, transaction_at };
+}
+
 // ── STORY-023.2: Console message router ──────────────────────────────────────
 
 export type MessageIntent =

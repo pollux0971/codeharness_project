@@ -876,6 +876,109 @@ export async function importBrownfieldRepo(opts: BrownfieldImportOptions): Promi
   };
 }
 
+// ── STORY-023.3: Scope-change takeover — BacklogDelta and processScopeChange ──
+
+export interface BacklogDelta {
+  new_stories: StoryNode[];
+  epic_list_additions: string[];
+  source_message: string;
+  validated: boolean;
+  validation_errors: string[];
+}
+
+export interface ScopeChangeOptions {
+  runningStoryId?: string;
+  ambiguityRunner?: (questions: AmbiguityQuestion[]) => Promise<Record<string, string>>;
+}
+
+function deriveStoryIdFromMessage(text: string): string {
+  const slug = text.trim().toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 40);
+  return `STORY-SC-${slug || 'unnamed'}`;
+}
+
+function validateStoryNodes(stories: StoryNode[]): string[] {
+  const errors: string[] = [];
+  for (const s of stories) {
+    if (!s.story_id) errors.push('story_id is required');
+    if (!s.allowed_write_set || s.allowed_write_set.length === 0) {
+      errors.push(`allowed_write_set must be non-empty for story ${s.story_id}`);
+    }
+    if (!s.parallelism_class) errors.push(`parallelism_class is required for story ${s.story_id}`);
+  }
+  return errors;
+}
+
+export async function processScopeChange(
+  messageText: string,
+  opts: ScopeChangeOptions,
+): Promise<BacklogDelta> {
+  // Step 1: injection check
+  const injectionResult = detectPromptInjection(messageText);
+  if (injectionResult.detected) {
+    return {
+      new_stories: [],
+      epic_list_additions: [],
+      source_message: messageText,
+      validated: false,
+      validation_errors: [`scope_change_rejected: prompt injection detected: ${injectionResult.signals.join(', ')}`],
+    };
+  }
+
+  // Step 2: classify the idea
+  let mode: IdeaMode;
+  try {
+    mode = classifyIdea({ title: 'scope change', description: messageText });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { new_stories: [], epic_list_additions: [], source_message: messageText, validated: false, validation_errors: [msg] };
+  }
+
+  // Step 3: build a stub StoryNode (1 per idea)
+  const storyId = deriveStoryIdFromMessage(messageText);
+  const epicId = `EPIC-SC-${mode}`;
+  const taskClass: TaskClass = mode === 'patch' ? 'patch' : mode === 'brownfield' ? 'brownfield' : 'greenfield';
+  const storyNode: StoryNode = {
+    story_id: storyId,
+    depends_on: [],
+    allowed_write_set: ['src/**'],
+    parallelism_class: 'sequential',
+    task_class: taskClass,
+  };
+
+  // Ambiguity detection (brownfield only — greenfield returns [])
+  emitAmbiguityQuestions(storyNode, []);
+
+  // Step 4: bundle gate — validate story nodes
+  const validation_errors = validateStoryNodes([storyNode]);
+  if (validation_errors.length > 0) {
+    return { new_stories: [], epic_list_additions: [], source_message: messageText, validated: false, validation_errors };
+  }
+
+  // Step 5: preemption guard — no new story may replace the running story
+  if (opts.runningStoryId && storyNode.story_id === opts.runningStoryId) {
+    return {
+      new_stories: [],
+      epic_list_additions: [],
+      source_message: messageText,
+      validated: false,
+      validation_errors: [`scope_change_rejected: story_id '${storyNode.story_id}' would preempt running story`],
+    };
+  }
+
+  return {
+    new_stories: [storyNode],
+    epic_list_additions: [epicId],
+    source_message: messageText,
+    validated: true,
+    validation_errors: [],
+  };
+}
+
 const REQUIRED_INTAKE_FIELDS = [
   'intake_id', 'repo_path', 'intake_at', 'entry_points',
   'layers', 'dependency_map', 'conventions', 'recovery_docs_path',

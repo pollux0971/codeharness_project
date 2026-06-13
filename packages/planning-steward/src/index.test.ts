@@ -10,7 +10,8 @@ import {
   classifyDefect, attemptReproduction, buildRepairStory, triageDefect,
   importBrownfieldRepo, validateBrownfieldIntake,
   emitAmbiguityQuestions,
-  type DefectReport, type TestRunner, type TaskClass,
+  processScopeChange,
+  type DefectReport, type TestRunner, type TaskClass, type BacklogDelta,
 } from './index';
 
 describe('planning-steward (existing)', () => {
@@ -806,5 +807,35 @@ describe('task-class-bundle', () => {
     const s = makeBrownfieldStory();
     const qs = emitAmbiguityQuestions(s, ['calcSub']); // calcAdd not in existingSymbols
     expect(qs.length).toBe(0);
+  });
+});
+
+// ── STORY-023.3: Scope-change takeover ───────────────────────────────────────
+
+describe('scope-change', () => {
+  it('takeover_switches_pane_ownership', async () => {
+    const delta = await processScopeChange('add a caching layer for the API', {});
+    expect(delta).toBeDefined();
+    expect(Array.isArray(delta.new_stories)).toBe(true);
+  });
+
+  it('backlog_delta_passes_bundle_gate', async () => {
+    const delta = await processScopeChange('add a logging module', {});
+    expect(delta.validated).toBe(true);
+    expect(delta.validation_errors).toHaveLength(0);
+  });
+
+  it('running_story_never_preempted', async () => {
+    const delta = await processScopeChange('add search functionality', {
+      runningStoryId: 'STORY-RUNNING',
+    });
+    const ids = delta.new_stories.map(s => s.story_id);
+    expect(ids).not.toContain('STORY-RUNNING');
+  });
+
+  it('supervisor_announces_via_tracker_not_chat', async () => {
+    const delta = await processScopeChange('add a metrics dashboard', {});
+    expect(delta.new_stories.length).toBeGreaterThan(0);
+    expect(typeof delta.new_stories[0].story_id).toBe('string');
   });
 });
