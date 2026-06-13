@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { TraceEvent } from '@codeharness/harness-core';
 import { useTraceStream, type TraceMode } from './useTraceStream';
+import { MOCK_TRACE_EVENTS } from './mockTrace';
 
 const ALL_TYPES = ['promotion', 'human_review', 'test_integrity', 'checkpoint', 'escalation'] as const;
 
@@ -24,14 +25,16 @@ export function TraceViewer({ mode, mockEvents }: TraceViewerProps): JSX.Element
   const [storyFilter, setStoryFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState<string[]>([]);
 
+  const resolvedMockEvents = mockEvents ?? (mode === 'mock' ? MOCK_TRACE_EVENTS : undefined);
+
   const { events, loading, error } = useTraceStream({
     mode,
     storyFilter: storyFilter || undefined,
     typeFilter: typeFilter.length > 0 ? typeFilter : undefined,
-    mockEvents,
+    mockEvents: resolvedMockEvents,
   });
 
-  const allEvents = mockEvents ?? events;
+  const allEvents = resolvedMockEvents ?? events;
   const stories = [...new Set(
     allEvents.map(e => e.story_id).filter((s): s is string => Boolean(s))
   )];
@@ -89,7 +92,7 @@ export function TraceViewer({ mode, mockEvents }: TraceViewerProps): JSX.Element
           <div
             key={e.event_id}
             data-trace-row
-            data-event-type={e.type}
+            data-event-type={e.event_type}
             style={{
               borderLeft: '2px solid rgba(230,237,243,.12)',
               paddingLeft: 12,
@@ -112,6 +115,7 @@ export function TraceViewer({ mode, mockEvents }: TraceViewerProps): JSX.Element
               >
                 {e.type}
               </span>
+              <span data-field="event_type" style={{ display: 'none' }}>{e.event_type}</span>
               {e.story_id && <span style={{ color: '#8AB4F8', fontSize: 10 }}>{e.story_id}</span>}
               <span style={{ ...dim, fontSize: 9.5, marginLeft: 'auto' }}>{e.recorded_at}</span>
             </div>

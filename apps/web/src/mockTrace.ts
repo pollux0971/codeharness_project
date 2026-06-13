@@ -8,6 +8,10 @@ export const MOCK_TRACE_EVENTS: TraceEvent[] = [
     story_id:    'STORY-000.1',
     payload:     { agent: 'supervisor', action: 'dispatched_to_developer' },
     recorded_at: '2026-01-01T00:00:00Z',
+    seq:         0,
+    event_type:  'story_started',
+    agent_role:  'supervisor',
+    summary:     'Story STORY-000.1 dispatched to developer',
   },
   {
     event_id:    'evt-mock-002',
@@ -15,6 +19,10 @@ export const MOCK_TRACE_EVENTS: TraceEvent[] = [
     story_id:    'STORY-000.1',
     payload:     { commit_sha: 'abc1234', tests_passed: 14 },
     recorded_at: '2026-01-01T00:01:00Z',
+    seq:         1,
+    event_type:  'checkpoint',
+    agent_role:  'developer',
+    summary:     'Checkpoint reached: 14 tests passed',
   },
   {
     event_id:    'evt-mock-003',
@@ -22,6 +30,10 @@ export const MOCK_TRACE_EVENTS: TraceEvent[] = [
     story_id:    'STORY-000.1',
     payload:     { outcome: 'approved', decided_by: 'human' },
     recorded_at: '2026-01-01T00:02:00Z',
+    seq:         2,
+    event_type:  'promotion',
+    agent_role:  'supervisor',
+    summary:     'Story promoted after human approval',
   },
   {
     event_id:    'evt-mock-004',
@@ -29,6 +41,10 @@ export const MOCK_TRACE_EVENTS: TraceEvent[] = [
     story_id:    'STORY-000.2',
     payload:     { outcome: 'approved', reason: 'all tests green' },
     recorded_at: '2026-01-01T00:03:00Z',
+    seq:         3,
+    event_type:  'human_review',
+    agent_role:  'reviewer',
+    summary:     'Human review approved: all tests green',
   },
   {
     event_id:    'evt-mock-005',
@@ -36,5 +52,9 @@ export const MOCK_TRACE_EVENTS: TraceEvent[] = [
     story_id:    'STORY-000.2',
     payload:     { reason: 'attempt_budget_exceeded', story_id: 'STORY-000.2' },
     recorded_at: '2026-01-01T00:04:00Z',
+    seq:         4,
+    event_type:  'escalation',
+    agent_role:  'debugger',
+    summary:     'Escalated: attempt budget exceeded on STORY-000.2',
   },
 ];

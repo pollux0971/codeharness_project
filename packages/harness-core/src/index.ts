@@ -18,6 +18,10 @@ export interface TraceEvent {
   story_id?: string;
   payload: Record<string, unknown>;
   recorded_at: string;
+  seq?: number;
+  event_type?: string;
+  agent_role?: string;
+  summary?: string;
 }
 
 export type StoryStatus =
