@@ -38,6 +38,9 @@ importers:
       '@codeharness/preflight-runner':
         specifier: workspace:*
         version: link:packages/preflight-runner
+      '@codeharness/settings':
+        specifier: workspace:*
+        version: link:packages/settings
       '@codeharness/shared':
         specifier: workspace:*
         version: link:packages/shared
@@ -88,6 +91,9 @@ importers:
         specifier: latest
         version: 8.0.16(@types/node@22.19.20)(esbuild@0.28.0)(tsx@4.22.4)(yaml@2.9.0)
     devDependencies:
+      '@codeharness/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
       '@testing-library/jest-dom':
         specifier: ^6
         version: 6.9.1
@@ -129,13 +135,20 @@ importers:
 
   packages/failure-bank: {}
 
-  packages/harness-core: {}
+  packages/harness-core:
+    dependencies:
+      '@codeharness/settings':
+        specifier: workspace:*
+        version: link:../settings
 
   packages/model-gateway:
     dependencies:
       '@codeharness/agent-output':
         specifier: workspace:*
         version: link:../agent-output
+      '@codeharness/settings':
+        specifier: workspace:*
+        version: link:../settings
     devDependencies:
       yaml:
         specifier: ^2.7.0
@@ -143,9 +156,22 @@ importers:
 
   packages/permission-gateway: {}
 
-  packages/planning-steward: {}
+  packages/planning-steward:
+    dependencies:
+      '@codeharness/codegraph-adapter':
+        specifier: workspace:*
+        version: link:../codegraph-adapter
+      '@codeharness/context-manager':
+        specifier: workspace:*
+        version: link:../context-manager
 
   packages/preflight-runner: {}
+
+  packages/settings:
+    dependencies:
+      yaml:
+        specifier: ^2.7.0
+        version: 2.9.0
 
   packages/shared: {}
 
@@ -166,7 +192,11 @@ importers:
 
   packages/tool-executor: {}
 
-  packages/validator-suite: {}
+  packages/validator-suite:
+    dependencies:
+      '@codeharness/settings':
+        specifier: workspace:*
+        version: link:../settings
 
   packages/workspace-manager: {}
 

@@ -5,6 +5,7 @@
  * Owner: STORY-000.3.
  */
 import { execFileSync } from 'node:child_process';
+import type { HarnessSettings } from '@codeharness/settings';
 
 export interface ValidationResult { ok: boolean; errors: string[] }
 const isNonEmptyArray = (v: unknown): boolean => Array.isArray(v) && v.length > 0;
@@ -100,6 +101,13 @@ export interface QualityBarConfig {
 export const DEFAULT_QUALITY_BAR: QualityBarConfig = {
   required_checks: ['build', 'test', 'typecheck'],
 };
+
+// ── STORY-021.3: Settings-derived quality-bar configuration ──────────────
+
+export function qualityBarConfigFromSettings(settings: HarnessSettings): QualityBarConfig {
+  const checks = settings.quality_bar?.greenfield ?? DEFAULT_QUALITY_BAR.required_checks;
+  return { required_checks: checks };
+}
 
 export interface QualityBarCheckResult {
   check: QualityBarCheck;

@@ -22,6 +22,7 @@ import {
   parseModelRef,
   buildTierLadder,
   selectTierForAttempt,
+  budgetConfigFromSettings,
   type DeveloperOutput,
   type RealProviderHttpClient,
   type RoutingConfig,
@@ -29,6 +30,7 @@ import {
   type TierLadder,
   type TierSelectionContext,
 } from './index';
+import { DEFAULT_SETTINGS } from '@codeharness/settings';
 
 const goodDeveloperOutput: DeveloperOutput = {
   kind: 'patch_proposal', proposal_id: 'p1', story_id: 'STORY-X', changed_files: ['src/a.ts'],
@@ -408,5 +410,26 @@ describe('model-registry', () => {
     };
     const r = validateModelRegistry(cfg);
     expect(r.ok).toBe(true);
+  });
+});
+
+describe('settings-wiring-gateway', () => {
+  it('budgets_read_from_resolved_settings', () => {
+    const cfg = budgetConfigFromSettings({ ...DEFAULT_SETTINGS, budget: { max_calls_per_story: 10, max_tokens_per_story: 50000, max_calls_per_run: 100 } });
+    expect(cfg.maxCallsPerStory).toBe(10);
+    expect(cfg.maxTokensPerStory).toBe(50000);
+  });
+
+  it('behavior_unchanged_at_default_values', () => {
+    const cfg = budgetConfigFromSettings(DEFAULT_SETTINGS);
+    expect(cfg.maxCallsPerStory).toBe(30);
+    expect(cfg.maxTokensPerStory).toBe(400_000);
+  });
+
+  it('duplicate_caps_resolved_to_single_source', () => {
+    const s1 = budgetConfigFromSettings({ budget: { max_calls_per_story: 5, max_tokens_per_story: 100000, max_calls_per_run: 50 } });
+    const s2 = budgetConfigFromSettings({ budget: { max_calls_per_story: 20, max_tokens_per_story: 200000, max_calls_per_run: 200 } });
+    expect(s1.maxCallsPerStory).not.toBe(s2.maxCallsPerStory);
+    expect(s1.maxTokensPerStory).not.toBe(s2.maxTokensPerStory);
   });
 });

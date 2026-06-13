@@ -44,6 +44,9 @@
       "path": "packages/preflight-runner"
     },
     {
+      "path": "packages/settings"
+    },
+    {
       "path": "packages/shared"
     },
     {

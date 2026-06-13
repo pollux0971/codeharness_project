@@ -7,8 +7,10 @@ import {
   runIntegrationValidation,
   validateTaskClassBundle,
   captureBaseline, validateBrownfieldChange,
+  qualityBarConfigFromSettings,
   type QualityBarConfig, type QualityBarRunner, type TestResult, type BaselineRunner,
 } from './index';
+import { DEFAULT_SETTINGS } from '@codeharness/settings';
 
 const goodContract = {
   objective: 'do x', allowed_write_set: ['pkg/src/**'], validation_commands: ['pnpm test'],
@@ -444,5 +446,17 @@ describe('brownfield-validator', () => {
     ]));
     expect(result.ok).toBe(true);
     expect(result.new_failures).toHaveLength(0);
+  });
+});
+
+describe('settings-wiring-validator', () => {
+  it('quality_bar_read_from_settings', () => {
+    const cfg = qualityBarConfigFromSettings({ quality_bar: { greenfield: ['build', 'test'], brownfield_strictness: 'zero_new_failures' } });
+    expect(cfg.required_checks).toEqual(['build', 'test']);
+  });
+
+  it('quality_bar_default_unchanged', () => {
+    const cfg = qualityBarConfigFromSettings(DEFAULT_SETTINGS);
+    expect(cfg.required_checks).toEqual(['build', 'test', 'typecheck']);
   });
 });

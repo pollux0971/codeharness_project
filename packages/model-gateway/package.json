@@ -6,7 +6,8 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@codeharness/agent-output": "workspace:*"
+    "@codeharness/agent-output": "workspace:*",
+    "@codeharness/settings": "workspace:*"
   },
   "devDependencies": {
     "yaml": "^2.7.0"

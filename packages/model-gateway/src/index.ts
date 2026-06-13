@@ -18,6 +18,7 @@ import {
   type Escalation,
   type ValidationResult,
 } from '@codeharness/agent-output';
+import type { HarnessSettings } from '@codeharness/settings';
 
 export type ProviderKind = 'scripted' | 'fixture' | 'manual' | 'llm_remote';
 export type AgentRole = 'planning_steward' | 'supervisor' | 'developer' | 'debugger';
@@ -505,6 +506,16 @@ export async function runModelEval(opts: ModelEvalOptions): Promise<ModelEvalRec
     status_after: passed ? 'active' : 'candidate',
     evaluated_at: new Date().toISOString(),
     fixture_names: stories,
+  };
+}
+
+// ── STORY-021.3: Settings-derived budget configuration ────────────────────
+
+export function budgetConfigFromSettings(settings: HarnessSettings): BudgetConfig {
+  return {
+    maxCallsPerStory:  settings.budget?.max_calls_per_story  ?? 30,
+    maxTokensPerStory: settings.budget?.max_tokens_per_story ?? 400_000,
+    onExceed: 'escalate',
   };
 }
 

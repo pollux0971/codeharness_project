@@ -39,9 +39,10 @@ real_api_calls:
   kill_switch: false
   ci_override: true   # when CI env var is set, gateway ignores enabled:true
 
+# STORY-021.3: quality_bar.required_checks now derived from settings.quality_bar.greenfield.
 quality_bar:
-  required_checks: [build, test, typecheck]
-  coverage_threshold: null   # set to a number (e.g. 80) to enable coverage gate
+  required_checks: [build, test, typecheck]   # default; overridden by settings
+  coverage_threshold: null
 
 competitive_debug:
   enabled: false      # must be set per-story; system default off

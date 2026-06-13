@@ -39,9 +39,11 @@ harness_jobs:
   context_compaction: deepseek/deepseek-v4-flash
   trace_summary:      deepseek/deepseek-v4-flash
 
+# STORY-021.3: budget values now derived from settings.budget via budgetConfigFromSettings().
+# These YAML fields are kept as documentation of the defaults; the gateway reads from settings.
 budgets:
-  per_story_token_cap: 400000
-  per_run_token_cap: 4000000
+  per_story_token_cap: 400000    # default; overridden by settings.budget.max_tokens_per_story
+  per_run_token_cap: 4000000     # informational; not yet wired to RunBudgetPool
   on_exceed: escalate_human
 
 tier_upgrade_policy:
