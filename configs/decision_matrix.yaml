@@ -90,34 +90,80 @@ rules:
     action: retry_develop
     to: develop
     increment_attempts: true
+
+  # ---- Reviewer route (STORY-022.4) ----
   - id: 15
+    from: validate
+    when: validation_failed
+    guard: review_trigger_met
+    action: route_reviewer
+    reason: review_trigger
+    notes: >
+      Triggers the Reviewer (read-only advisory leaf) before Debugger.
+      The Reviewer's ranked directions are placed in the Debugger's next context packet.
+      Only fires when review.trigger threshold is met (default: on_second_failure).
+
+  - id: 16
+    from: validate
+    when: validation_failed
+    guard: review_trigger_not_met
+    action: route_debugger
+    reason: normal_debug_path
+    notes: >
+      Normal debug path when reviewer trigger has not fired.
+
+  - id: 17
+    from: reviewer
+    when: reviewer_done
+    guard: scope_expansion_flagged
+    action: escalate_human
+    reason: reviewer_flagged_scope_expansion
+    notes: >
+      Improvement direction requires scope expansion → human gate. Never auto-taken.
+
+  - id: 18
+    from: reviewer
+    when: reviewer_done
+    guard: scope_expansion_not_flagged
+    action: route_debugger
+    reason: reviewer_informed_debug
+    notes: >
+      Pass direction #1 to Debugger. On re-fail, Debugger gets direction #2.
+
+  - id: 21
     from: debug
     when: needs_scope_expansion
     action: escalate_human
     reason: scope_expansion
-  - id: 16
+  - id: 22
     from: debug
     when: repeated_failure
     action: escalate_human
     reason: repeated_failure_cycle
-  - id: 17
+  - id: 23
     from: checkpoint
     when: story_passed
     guard: rollback_present
     action: checkpoint_story
     to: select
-  - id: 18
+  - id: 24
     from: checkpoint
     when: all_checkpointed_merge_intended
     action: request_merge_review
-  - id: 19
+  - id: 25
     from: gate
     when: trust_boundary_crossing
     action: escalate_human
     reason: boundary_crossing
-  - id: 20
+  - id: 26
     from: done
     action: stop_run
+
+review:
+  trigger: on_second_failure    # options: never | on_second_failure | always
+  max_directions_to_debugger: 2 # Debugger receives directions #1..#2
+  scope_expansion_direction_types:
+    - widen_write_set            # these direction types always require human gate
 
 # Forced escalation regardless of state (harness-detected, not agent-flagged)
 human_gate_triggers:
