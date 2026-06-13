@@ -335,7 +335,7 @@ export async function validateBrownfieldChange(
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── STORY-022.1: Diagnosis report schema and validator gate ──────────────────
+// ── STORY-022.1 / STORY-023.5: Diagnosis report schema and validator gate ────
 
 export type FailureClassification =
   | 'test_assertion_mismatch' | 'type_error' | 'build_error'
@@ -358,6 +358,22 @@ export interface ImprovementDirection {
   affected_files: string[];
 }
 
+export interface ConsistencyViolation {
+  description: string;
+  affected_story_ids: string[];
+}
+
+export interface ArchitectureConformance {
+  conforms: boolean;
+  violations: string[];
+}
+
+export interface ResccopeRecommendation {
+  advisory_only: true;
+  rationale: string;
+  direction: 'scope_in' | 'scope_out' | 'none';
+}
+
 export interface DiagnosisReport {
   report_id: string;
   story_id: string;
@@ -368,6 +384,10 @@ export interface DiagnosisReport {
   referenced_gene_signals: string[];
   reviewer_model: string;
   reviewed_at: string;
+  consistency_violations?: ConsistencyViolation[] | null;
+  architecture_conformance?: ArchitectureConformance | null;
+  regression_surface?: string[] | null;
+  rescope_recommendation?: ResccopeRecommendation | null;
 }
 
 const FAILURE_CLASSIFICATIONS: FailureClassification[] = [

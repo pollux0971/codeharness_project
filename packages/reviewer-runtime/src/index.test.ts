@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { runReviewer, type ReviewerInput } from './index.js';
 import { createScriptedReviewer } from './scripted.js';
 import { readJsonl } from '@codeharness/event-log';
+import { validateSettings } from '@codeharness/settings';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { unlinkSync, existsSync } from 'fs';
@@ -110,5 +111,13 @@ describe('reviewer-runtime', () => {
     } finally {
       cleanup(trace);
     }
+  });
+});
+
+// ── STORY-023.5: on_cycle_complete trigger ────────────────────────────────────
+
+describe('on-cycle-complete-trigger', () => {
+  it('on_cycle_complete_trigger_available', () => {
+    expect(validateSettings({ review: { trigger: 'on_cycle_complete' } }).ok).toBe(true);
   });
 });

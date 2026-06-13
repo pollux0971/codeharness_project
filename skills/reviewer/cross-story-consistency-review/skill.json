@@ -1,0 +1,18 @@
+{
+  "skill_id": "reviewer.cross-story-consistency-review",
+  "agent_role": "reviewer",
+  "description": "Validate cross-story consistency in parallel runs: check violations are substantive, affected_story_ids are named, and any rescope_recommendation is advisory-only.",
+  "version": "0.1.0",
+  "status": "needs_tests",
+  "entry_documents": ["SKILL.md"],
+  "scripts": ["scripts/evaluate.py"],
+  "tests": ["tests/test_skill.py"],
+  "validation": ["pytest -q tests/"],
+  "memory_file": ".memory.md",
+  "depends_on": [],
+  "enhances": ["reviewer.improvement-direction-authoring"],
+  "provenance": { "source_story": "STORY-023.5", "source_trajectory": "", "created_by": "harness" },
+  "failure_signatures": ["missing|affected_story_ids", "short|description", "non-advisory|rescope"],
+  "last_evaluation": { "passed": 0, "total": 0, "fresh_runs": 0, "pass_rate": 0.0, "at": "" },
+  "leakage_audit": "unrun"
+}

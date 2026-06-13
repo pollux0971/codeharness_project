@@ -974,6 +974,90 @@
         "at": "2026-06-13T15:24:47.567300Z"
       },
       "leakage_audit": "unrun"
+    },
+    {
+      "skill_id": "reviewer.cross-story-consistency-review",
+      "agent_role": "reviewer",
+      "description": "Validate cross-story consistency in parallel runs: check violations are substantive, affected_story_ids are named, and any rescope_recommendation is advisory-only.",
+      "version": "0.1.0",
+      "status": "registered",
+      "entry_documents": [
+        "SKILL.md"
+      ],
+      "scripts": [
+        "scripts/evaluate.py"
+      ],
+      "tests": [
+        "tests/test_skill.py"
+      ],
+      "validation": [
+        "pytest -q tests/"
+      ],
+      "memory_file": ".memory.md",
+      "depends_on": [],
+      "enhances": [
+        "reviewer.improvement-direction-authoring"
+      ],
+      "provenance": {
+        "source_story": "STORY-023.5",
+        "source_trajectory": "",
+        "created_by": "harness"
+      },
+      "failure_signatures": [
+        "missing|affected_story_ids",
+        "short|description",
+        "non-advisory|rescope"
+      ],
+      "last_evaluation": {
+        "passed": 5,
+        "total": 5,
+        "fresh_runs": 1,
+        "pass_rate": 1.0,
+        "at": "2026-06-13T16:30:24.311433Z"
+      },
+      "leakage_audit": "unrun"
+    },
+    {
+      "skill_id": "reviewer.architecture-conformance-review",
+      "agent_role": "reviewer",
+      "description": "Validate architecture-conformance reviews: conforms field present, violations listed when non-conforming, rescope_recommendation advisory-only with valid direction.",
+      "version": "0.1.0",
+      "status": "registered",
+      "entry_documents": [
+        "SKILL.md"
+      ],
+      "scripts": [
+        "scripts/evaluate.py"
+      ],
+      "tests": [
+        "tests/test_skill.py"
+      ],
+      "validation": [
+        "pytest -q tests/"
+      ],
+      "memory_file": ".memory.md",
+      "depends_on": [],
+      "enhances": [
+        "reviewer.what-not-to-change-guardrails"
+      ],
+      "provenance": {
+        "source_story": "STORY-023.5",
+        "source_trajectory": "",
+        "created_by": "harness"
+      },
+      "failure_signatures": [
+        "missing|conforms",
+        "non-conforming|no_violations",
+        "bad|direction"
+      ],
+      "last_evaluation": {
+        "passed": 5,
+        "total": 5,
+        "fresh_runs": 1,
+        "pass_rate": 1.0,
+        "at": "2026-06-13T16:30:24.478265Z"
+      },
+      "leakage_audit": "unrun"
     }
   ]
 }

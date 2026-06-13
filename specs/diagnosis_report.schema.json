@@ -58,6 +58,37 @@
       "items": { "type": "string" }
     },
     "reviewer_model":  { "type": "string" },
-    "reviewed_at":     { "type": "string", "format": "date-time" }
+    "reviewed_at":     { "type": "string", "format": "date-time" },
+    "consistency_violations": {
+      "type": ["array", "null"],
+      "items": {
+        "type": "object",
+        "required": ["description", "affected_story_ids"],
+        "properties": {
+          "description":        { "type": "string", "minLength": 10 },
+          "affected_story_ids": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "architecture_conformance": {
+      "type": ["object", "null"],
+      "properties": {
+        "conforms":   { "type": "boolean" },
+        "violations": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "regression_surface": {
+      "type": ["array", "null"],
+      "items": { "type": "string" },
+      "description": "File or symbol paths most at risk of regression."
+    },
+    "rescope_recommendation": {
+      "type": ["object", "null"],
+      "properties": {
+        "advisory_only": { "type": "boolean", "const": true },
+        "rationale":     { "type": "string" },
+        "direction":     { "enum": ["scope_in", "scope_out", "none"] }
+      }
+    }
   }
 }

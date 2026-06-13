@@ -25,7 +25,7 @@ export interface DeliverySettings {
 export interface FailureBankSettings { scope?: 'project' | 'global'; }
 export interface BrownfieldSettings  { recovery_depth?: 'shallow' | 'full'; }
 export interface ReviewSettings {
-  trigger?:        'on_second_failure' | 'on_every_failure' | 'off';
+  trigger?:        'on_second_failure' | 'on_every_failure' | 'off' | 'on_cycle_complete';
   cross_model?:    boolean;
   max_directions?: number;
 }
@@ -92,7 +92,7 @@ const ENUM_VALUES: Record<string, EnumMap> = {
   delivery:     { promotion_target: ['local_stable', 'git_remote', 'artifact_registry'], human_gate_interface: ['cli', 'web', 'none'] },
   failure_bank: { scope: ['project', 'global'] },
   brownfield:   { recovery_depth: ['shallow', 'full'] },
-  review:       { trigger: ['on_second_failure', 'on_every_failure', 'off'] },
+  review:       { trigger: ['on_second_failure', 'on_every_failure', 'off', 'on_cycle_complete'] },
 };
 
 const INT_RANGES: Record<string, Record<string, [number, number]>> = {

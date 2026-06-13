@@ -506,6 +506,31 @@ describe('diagnosis-report', () => {
   });
 });
 
+// ── STORY-023.5: diagnosis-report v2 global findings ─────────────────────────
+
+describe('diagnosis-v2', () => {
+  it('diagnosis_v2_includes_global_findings', () => {
+    const v2Report = {
+      ...validReport,
+      consistency_violations: [
+        { description: 'Both stories modify src/calc.ts in conflicting ways.', affected_story_ids: ['S-A', 'S-B'] }
+      ],
+      architecture_conformance: { conforms: true, violations: [] },
+      regression_surface: ['src/calc.ts'],
+      rescope_recommendation: { advisory_only: true as const, rationale: 'No rescope needed.', direction: 'none' as const },
+    };
+    expect(validateDiagnosisReport(v2Report).ok).toBe(true);
+  });
+
+  it('rescope_recommendation_is_advisory_only', () => {
+    const report = {
+      ...validReport,
+      rescope_recommendation: { advisory_only: true as const, rationale: 'Advisory only.', direction: 'none' as const },
+    };
+    expect(validateDiagnosisReport(report).ok).toBe(true);
+  });
+});
+
 describe('settings-wiring-validator', () => {
   it('quality_bar_read_from_settings', () => {
     const cfg = qualityBarConfigFromSettings({ quality_bar: { greenfield: ['build', 'test'], brownfield_strictness: 'zero_new_failures' } });
