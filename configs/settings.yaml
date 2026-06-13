@@ -1,0 +1,5 @@
+# Operator overrides on top of settings.default.yaml.
+# Only keys present here override the defaults.
+
+model:
+  real_provider_scope: hybrid   # 2026-06-14: enable real provider calls (OpenAI key validated)

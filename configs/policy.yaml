@@ -35,7 +35,7 @@ ask_commands:
 - wget
 - chmod 777
 real_api_calls:
-  enabled: false
+  enabled: true       # human-gate flipped 2026-06-14 by operator pollux (OpenAI key validated); see decision_log
   kill_switch: false
   ci_override: true   # when CI env var is set, gateway ignores enabled:true
 

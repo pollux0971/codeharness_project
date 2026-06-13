@@ -66,13 +66,15 @@ providers:
   # ---- OpenAI Platform (api key, metered) — optional ----
   openai:
     kind: openai
+    gateway_registered: true   # registered in model-gateway when real_api_calls.enabled (2026-06-14, key validated)
     auth: { mode: api_key, handle: provider.openai.default }
     base_url: https://api.openai.com/v1
     api: responses
     capabilities: { tool_use: true, json: true, streaming: true }
     models:
-      - { name: gpt-5.5,      tier: strong, context: 1000000, good_for: [hard_patch, agentic_coding] }
-      - { name: gpt-5.5-mini, tier: cheap,  context: 1000000, good_for: [triage, summarize] }
+      - { name: gpt-5.5,     tier: strong, context: 1000000, good_for: [hard_patch, agentic_coding] }
+      # gpt-5.5-mini is not available on the operator's key; gpt-4o-mini is the cheap tier instead.
+      - { name: gpt-4o-mini, tier: cheap,  context: 128000,  good_for: [triage, summarize] }
 
   # ---- Anthropic (api key) — optional; add the handle to enable ----
   anthropic:
