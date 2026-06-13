@@ -1,0 +1,18 @@
+{
+  "skill_id": "reviewer.root-cause-hypothesis-ranking",
+  "agent_role": "reviewer",
+  "description": "Given structured failure signals + diff + genes, produce ≥1 ranked root-cause hypotheses with confidence 0–1 and evidence_lines. Rank descending by confidence.",
+  "version": "0.1.0",
+  "status": "needs_tests",
+  "entry_documents": ["SKILL.md"],
+  "scripts": ["scripts/evaluate.py"],
+  "tests": ["tests/test_skill.py"],
+  "validation": ["pytest -q tests/"],
+  "memory_file": ".memory.md",
+  "depends_on": ["reviewer.test-output-interpretation"],
+  "enhances": ["reviewer.improvement-direction-authoring"],
+  "provenance": { "source_story": "STORY-022.6", "source_trajectory": "", "created_by": "harness" },
+  "failure_signatures": ["empty|hypotheses", "confidence|out_of_range", "wrong|sort_order"],
+  "last_evaluation": { "passed": 0, "total": 0, "fresh_runs": 0, "pass_rate": 0.0, "at": "" },
+  "leakage_audit": "unrun"
+}

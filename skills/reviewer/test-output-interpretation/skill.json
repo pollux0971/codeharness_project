@@ -1,0 +1,18 @@
+{
+  "skill_id": "reviewer.test-output-interpretation",
+  "agent_role": "reviewer",
+  "description": "Parse failing test output into structured failure signals: test name, assertion type, actual vs expected, evidence lines. Never infers implementation intent.",
+  "version": "0.1.0",
+  "status": "needs_tests",
+  "entry_documents": ["SKILL.md"],
+  "scripts": ["scripts/evaluate.py"],
+  "tests": ["tests/test_skill.py"],
+  "validation": ["pytest -q tests/"],
+  "memory_file": ".memory.md",
+  "depends_on": [],
+  "enhances": ["reviewer.root-cause-hypothesis-ranking"],
+  "provenance": { "source_story": "STORY-022.6", "source_trajectory": "", "created_by": "harness" },
+  "failure_signatures": ["inferred|intent", "missing|test_name", "bad|assertion_type"],
+  "last_evaluation": { "passed": 0, "total": 0, "fresh_runs": 0, "pass_rate": 0.0, "at": "" },
+  "leakage_audit": "unrun"
+}

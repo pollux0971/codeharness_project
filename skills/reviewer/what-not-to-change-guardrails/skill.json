@@ -1,0 +1,18 @@
+{
+  "skill_id": "reviewer.what-not-to-change-guardrails",
+  "agent_role": "reviewer",
+  "description": "Author do_not_touch entries — file patterns that must not be modified in the repair. Conservative: when in doubt, add. Passing test files always in do_not_touch.",
+  "version": "0.1.0",
+  "status": "needs_tests",
+  "entry_documents": ["SKILL.md"],
+  "scripts": ["scripts/evaluate.py"],
+  "tests": ["tests/test_skill.py"],
+  "validation": ["pytest -q tests/"],
+  "memory_file": ".memory.md",
+  "depends_on": [],
+  "enhances": [],
+  "provenance": { "source_story": "STORY-022.6", "source_trajectory": "", "created_by": "harness" },
+  "failure_signatures": ["empty|do_not_touch", "missing|rationale", "passing_test|not_in_list"],
+  "last_evaluation": { "passed": 0, "total": 0, "fresh_runs": 0, "pass_rate": 0.0, "at": "" },
+  "leakage_audit": "unrun"
+}

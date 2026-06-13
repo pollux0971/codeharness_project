@@ -806,6 +806,174 @@
       "version": "0.1.0",
       "agent_role": "supervisor",
       "source_story": "STORY-020.6"
+    },
+    {
+      "skill_id": "reviewer.test-output-interpretation",
+      "agent_role": "reviewer",
+      "description": "Parse failing test output into structured failure signals: test name, assertion type, actual vs expected, evidence lines. Never infers implementation intent.",
+      "version": "0.1.0",
+      "status": "registered",
+      "entry_documents": [
+        "SKILL.md"
+      ],
+      "scripts": [
+        "scripts/evaluate.py"
+      ],
+      "tests": [
+        "tests/test_skill.py"
+      ],
+      "validation": [
+        "pytest -q tests/"
+      ],
+      "memory_file": ".memory.md",
+      "depends_on": [],
+      "enhances": [
+        "reviewer.root-cause-hypothesis-ranking"
+      ],
+      "provenance": {
+        "source_story": "STORY-022.6",
+        "source_trajectory": "",
+        "created_by": "harness"
+      },
+      "failure_signatures": [
+        "inferred|intent",
+        "missing|test_name",
+        "bad|assertion_type"
+      ],
+      "last_evaluation": {
+        "passed": 5,
+        "total": 5,
+        "fresh_runs": 1,
+        "pass_rate": 1.0,
+        "at": "2026-06-13T15:24:47.078987Z"
+      },
+      "leakage_audit": "unrun"
+    },
+    {
+      "skill_id": "reviewer.root-cause-hypothesis-ranking",
+      "agent_role": "reviewer",
+      "description": "Given structured failure signals + diff + genes, produce \u22651 ranked root-cause hypotheses with confidence 0\u20131 and evidence_lines. Rank descending by confidence.",
+      "version": "0.1.0",
+      "status": "registered",
+      "entry_documents": [
+        "SKILL.md"
+      ],
+      "scripts": [
+        "scripts/evaluate.py"
+      ],
+      "tests": [
+        "tests/test_skill.py"
+      ],
+      "validation": [
+        "pytest -q tests/"
+      ],
+      "memory_file": ".memory.md",
+      "depends_on": [
+        "reviewer.test-output-interpretation"
+      ],
+      "enhances": [
+        "reviewer.improvement-direction-authoring"
+      ],
+      "provenance": {
+        "source_story": "STORY-022.6",
+        "source_trajectory": "",
+        "created_by": "harness"
+      },
+      "failure_signatures": [
+        "empty|hypotheses",
+        "confidence|out_of_range",
+        "wrong|sort_order"
+      ],
+      "last_evaluation": {
+        "passed": 5,
+        "total": 5,
+        "fresh_runs": 1,
+        "pass_rate": 1.0,
+        "at": "2026-06-13T15:24:47.246790Z"
+      },
+      "leakage_audit": "unrun"
+    },
+    {
+      "skill_id": "reviewer.improvement-direction-authoring",
+      "agent_role": "reviewer",
+      "description": "Author \u22651 structured ImprovementDirection items with valid direction_type and rationale. Directions requiring scope expansion must be flagged, not auto-applied.",
+      "version": "0.1.0",
+      "status": "registered",
+      "entry_documents": [
+        "SKILL.md"
+      ],
+      "scripts": [
+        "scripts/evaluate.py"
+      ],
+      "tests": [
+        "tests/test_skill.py"
+      ],
+      "validation": [
+        "pytest -q tests/"
+      ],
+      "memory_file": ".memory.md",
+      "depends_on": [
+        "reviewer.root-cause-hypothesis-ranking"
+      ],
+      "enhances": [],
+      "provenance": {
+        "source_story": "STORY-022.6",
+        "source_trajectory": "",
+        "created_by": "harness"
+      },
+      "failure_signatures": [
+        "empty|items",
+        "bad|direction_type",
+        "scope_expansion|not_flagged"
+      ],
+      "last_evaluation": {
+        "passed": 5,
+        "total": 5,
+        "fresh_runs": 1,
+        "pass_rate": 1.0,
+        "at": "2026-06-13T15:24:47.407258Z"
+      },
+      "leakage_audit": "unrun"
+    },
+    {
+      "skill_id": "reviewer.what-not-to-change-guardrails",
+      "agent_role": "reviewer",
+      "description": "Author do_not_touch entries \u2014 file patterns that must not be modified in the repair. Conservative: when in doubt, add. Passing test files always in do_not_touch.",
+      "version": "0.1.0",
+      "status": "registered",
+      "entry_documents": [
+        "SKILL.md"
+      ],
+      "scripts": [
+        "scripts/evaluate.py"
+      ],
+      "tests": [
+        "tests/test_skill.py"
+      ],
+      "validation": [
+        "pytest -q tests/"
+      ],
+      "memory_file": ".memory.md",
+      "depends_on": [],
+      "enhances": [],
+      "provenance": {
+        "source_story": "STORY-022.6",
+        "source_trajectory": "",
+        "created_by": "harness"
+      },
+      "failure_signatures": [
+        "empty|do_not_touch",
+        "missing|rationale",
+        "passing_test|not_in_list"
+      ],
+      "last_evaluation": {
+        "passed": 5,
+        "total": 5,
+        "fresh_runs": 1,
+        "pass_rate": 1.0,
+        "at": "2026-06-13T15:24:47.567300Z"
+      },
+      "leakage_audit": "unrun"
     }
   ]
 }
