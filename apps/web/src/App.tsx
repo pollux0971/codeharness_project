@@ -1,3 +1,4 @@
+import './theme.css';
 import { useEffect, useState } from 'react';
 import { TraceViewer } from './TraceViewer';
 import { ApprovalQueue } from './ApprovalQueue';

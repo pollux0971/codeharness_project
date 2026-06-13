@@ -1,0 +1,33 @@
+:root {
+  color-scheme: dark;
+
+  /* MD3 core surface tokens */
+  --md-sys-color-surface: #1c1b1f;
+  --md-sys-color-surface-variant: #49454f;
+  --md-sys-color-on-surface: #e6e1e5;
+  --md-sys-color-background: #1c1b1f;
+  --md-sys-color-on-background: #e6e1e5;
+  --md-sys-color-outline: #938f99;
+
+  /* Role colors */
+  --role-supervisor: #d0bcff;      /* primary / purple-ish */
+  --role-developer: #aff4c6;       /* secondary / green */
+  --role-debugger: #ffd8a8;        /* tertiary / amber */
+  --role-reviewer: #cac4d0;        /* neutral-variant / slate */
+
+  /* MD3 primary/secondary/tertiary */
+  --md-sys-color-primary:          var(--role-supervisor);
+  --md-sys-color-secondary:        var(--role-developer);
+  --md-sys-color-tertiary:         var(--role-debugger);
+  --md-sys-color-neutral-variant:  var(--role-reviewer);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+    --md-sys-color-surface: #fffbfe;
+    --md-sys-color-on-surface: #1c1b1f;
+    --md-sys-color-background: #fffbfe;
+    --md-sys-color-on-background: #1c1b1f;
+  }
+}
