@@ -335,6 +335,109 @@ export async function validateBrownfieldChange(
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── STORY-022.1: Diagnosis report schema and validator gate ──────────────────
+
+export type FailureClassification =
+  | 'test_assertion_mismatch' | 'type_error' | 'build_error'
+  | 'runtime_exception' | 'spec_conformance_failure' | 'scope_error'
+  | 'flaky_test' | 'environment_issue' | 'unknown';
+
+export type DirectionType =
+  | 'change_implementation' | 'tighten_test' | 'widen_write_set'
+  | 'clarify_spec' | 'add_prereq_check';
+
+export interface RootCauseHypothesis {
+  hypothesis: string;
+  confidence: number;
+  evidence_lines: string[];
+}
+
+export interface ImprovementDirection {
+  direction_type: DirectionType;
+  rationale: string;
+  affected_files: string[];
+}
+
+export interface DiagnosisReport {
+  report_id: string;
+  story_id: string;
+  failure_classification: FailureClassification;
+  root_cause_hypotheses: RootCauseHypothesis[];
+  improvement_directions: ImprovementDirection[];
+  do_not_touch: string[];
+  referenced_gene_signals: string[];
+  reviewer_model: string;
+  reviewed_at: string;
+}
+
+const FAILURE_CLASSIFICATIONS: FailureClassification[] = [
+  'test_assertion_mismatch', 'type_error', 'build_error',
+  'runtime_exception', 'spec_conformance_failure', 'scope_error',
+  'flaky_test', 'environment_issue', 'unknown',
+];
+
+const DIRECTION_TYPES: DirectionType[] = [
+  'change_implementation', 'tighten_test', 'widen_write_set',
+  'clarify_spec', 'add_prereq_check',
+];
+
+export function validateDiagnosisReport(report: unknown): ValidationResult {
+  const errors: string[] = [];
+
+  if (report === null || report === undefined || typeof report !== 'object' || Array.isArray(report)) {
+    return { ok: false, errors: ['report must be a non-null object'] };
+  }
+  const r = report as Record<string, unknown>;
+
+  if (typeof r.report_id !== 'string' || !r.report_id.trim()) errors.push('missing: report_id');
+  if (typeof r.story_id !== 'string' || !r.story_id.trim()) errors.push('missing: story_id');
+  if (!FAILURE_CLASSIFICATIONS.includes(r.failure_classification as FailureClassification)) {
+    errors.push('failure_classification is invalid or missing');
+  }
+  if (typeof r.reviewer_model !== 'string' || !r.reviewer_model.trim()) errors.push('missing: reviewer_model');
+  if (typeof r.reviewed_at !== 'string' || !r.reviewed_at.trim()) errors.push('missing: reviewed_at');
+  if (!Array.isArray(r.do_not_touch)) errors.push('do_not_touch must be an array');
+  if (!Array.isArray(r.referenced_gene_signals)) errors.push('referenced_gene_signals must be an array');
+
+  if (!Array.isArray(r.root_cause_hypotheses) || r.root_cause_hypotheses.length === 0) {
+    errors.push('root_cause_hypotheses must be a non-empty array');
+  } else {
+    (r.root_cause_hypotheses as unknown[]).forEach((item, i) => {
+      const h = item as Record<string, unknown>;
+      if (typeof h.hypothesis !== 'string' || h.hypothesis.length < 10) {
+        errors.push(`root_cause_hypotheses[${i}].hypothesis must be at least 10 characters`);
+      }
+      if (typeof h.confidence !== 'number' || h.confidence < 0 || h.confidence > 1) {
+        errors.push(`root_cause_hypotheses[${i}].confidence must be a number in [0, 1]`);
+      }
+      if (!Array.isArray(h.evidence_lines)) {
+        errors.push(`root_cause_hypotheses[${i}].evidence_lines must be an array`);
+      }
+    });
+  }
+
+  if (!Array.isArray(r.improvement_directions) || r.improvement_directions.length === 0) {
+    errors.push('improvement_directions must be a non-empty array');
+  } else {
+    (r.improvement_directions as unknown[]).forEach((item, i) => {
+      const d = item as Record<string, unknown>;
+      if (!DIRECTION_TYPES.includes(d.direction_type as DirectionType)) {
+        errors.push(`improvement_directions[${i}].direction_type is invalid or missing`);
+      }
+      if (typeof d.rationale !== 'string' || d.rationale.length < 10) {
+        errors.push(`improvement_directions[${i}].rationale must be at least 10 characters`);
+      }
+      if (!Array.isArray(d.affected_files)) {
+        errors.push(`improvement_directions[${i}].affected_files must be an array`);
+      }
+    });
+  }
+
+  return { ok: errors.length === 0, errors };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
  * STORY-009.3: Gate that validates a PlanningBundle object before backlog emission.
  * Deterministically rejects:

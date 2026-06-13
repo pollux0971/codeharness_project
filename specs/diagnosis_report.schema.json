@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DiagnosisReport",
+  "description": "Structured output of a Reviewer pass. No write-set, no goal change, no acceptance change.",
+  "type": "object",
+  "required": ["report_id", "story_id", "failure_classification",
+               "root_cause_hypotheses", "improvement_directions",
+               "do_not_touch", "referenced_gene_signals", "reviewer_model",
+               "reviewed_at"],
+  "additionalProperties": false,
+  "properties": {
+    "report_id":              { "type": "string" },
+    "story_id":               { "type": "string" },
+    "failure_classification": {
+      "enum": ["test_assertion_mismatch", "type_error", "build_error",
+               "runtime_exception", "spec_conformance_failure", "scope_error",
+               "flaky_test", "environment_issue", "unknown"]
+    },
+    "root_cause_hypotheses": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["hypothesis", "confidence", "evidence_lines"],
+        "additionalProperties": false,
+        "properties": {
+          "hypothesis":     { "type": "string", "minLength": 10 },
+          "confidence":     { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+          "evidence_lines": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "improvement_directions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["direction_type", "rationale", "affected_files"],
+        "additionalProperties": false,
+        "properties": {
+          "direction_type": {
+            "enum": ["change_implementation", "tighten_test",
+                     "widen_write_set", "clarify_spec", "add_prereq_check"]
+          },
+          "rationale":      { "type": "string", "minLength": 10 },
+          "affected_files": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "do_not_touch": {
+      "type": "array",
+      "description": "Files or patterns the repair must not modify.",
+      "items": { "type": "string" }
+    },
+    "referenced_gene_signals": {
+      "type": "array",
+      "description": "matching_signal strings from the failure bank that informed this report.",
+      "items": { "type": "string" }
+    },
+    "reviewer_model":  { "type": "string" },
+    "reviewed_at":     { "type": "string", "format": "date-time" }
+  }
+}

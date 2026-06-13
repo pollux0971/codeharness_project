@@ -8,7 +8,9 @@ import {
   validateTaskClassBundle,
   captureBaseline, validateBrownfieldChange,
   qualityBarConfigFromSettings,
+  validateDiagnosisReport,
   type QualityBarConfig, type QualityBarRunner, type TestResult, type BaselineRunner,
+  type DiagnosisReport,
 } from './index';
 import { DEFAULT_SETTINGS } from '@codeharness/settings';
 
@@ -446,6 +448,61 @@ describe('brownfield-validator', () => {
     ]));
     expect(result.ok).toBe(true);
     expect(result.new_failures).toHaveLength(0);
+  });
+});
+
+// ── STORY-022.1: diagnosis-report validator ───────────────────────────────────
+
+const validReport: DiagnosisReport = {
+  report_id: 'dr-001', story_id: 'STORY-X',
+  failure_classification: 'test_assertion_mismatch',
+  root_cause_hypotheses: [
+    { hypothesis: 'The divide function does not guard against zero.', confidence: 0.9, evidence_lines: ['src/calc.ts:12'] }
+  ],
+  improvement_directions: [
+    { direction_type: 'change_implementation', rationale: 'Add a guard clause before the division.', affected_files: ['src/calc.ts'] }
+  ],
+  do_not_touch: ['test/calc.test.ts'],
+  referenced_gene_signals: ['src:calc|type:runtime_error'],
+  reviewer_model: 'scripted-reviewer-v1',
+  reviewed_at: '2026-01-01T00:00:00Z',
+};
+
+describe('diagnosis-report', () => {
+  it('diagnosis_schema_well_formed', () => {
+    expect(validateDiagnosisReport(validReport).ok).toBe(true);
+  });
+
+  it('malformed_report_rejected', () => {
+    const bad = { ...validReport, root_cause_hypotheses: undefined };
+    const r = validateDiagnosisReport(bad);
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(' ')).toMatch(/root_cause_hypotheses/);
+  });
+
+  it('prose_only_directions_rejected', () => {
+    const bad = { ...validReport, improvement_directions: [
+      { rationale: 'Just a prose direction.', affected_files: [] }
+    ]};
+    expect(validateDiagnosisReport(bad).ok).toBe(false);
+  });
+
+  it('confidence_out_of_range_fails', () => {
+    const bad = { ...validReport, root_cause_hypotheses: [
+      { hypothesis: 'The divide function crashes on zero input.', confidence: 1.5, evidence_lines: [] }
+    ]};
+    expect(validateDiagnosisReport(bad).ok).toBe(false);
+  });
+
+  it('hypothesis_too_short_fails', () => {
+    const bad = { ...validReport, root_cause_hypotheses: [
+      { hypothesis: 'bug', confidence: 0.9, evidence_lines: [] }
+    ]};
+    expect(validateDiagnosisReport(bad).ok).toBe(false);
+  });
+
+  it('empty_hypotheses_list_fails', () => {
+    expect(validateDiagnosisReport({ ...validReport, root_cause_hypotheses: [] }).ok).toBe(false);
   });
 });
 
