@@ -1,0 +1,15 @@
+{
+  "story_id": "STORY-BF-E2E-001",
+  "task_class": "brownfield",
+  "depends_on": [],
+  "parallelism_class": "sequential",
+  "allowed_write_set": ["src/calc.ts"],
+  "brownfield_deltas": [
+    {
+      "file": "src/calc.ts",
+      "affected_symbols": ["divide"],
+      "change_intent": "Guard divide against zero divisor"
+    }
+  ],
+  "patch_text": "export const add = (a, b) => a + b;\nexport const subtract = (a, b) => a - b;\nexport const multiply = (a, b) => a * b;\nexport const divide = (a, b) => { if (b === 0) throw new Error('DivideByZeroError'); return a / b; };\n"
+}

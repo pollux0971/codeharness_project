@@ -1,0 +1,6 @@
+{
+  "captured_at": "2026-01-01T00:00:00Z",
+  "passing": ["calc.add passes", "calc.subtract passes", "calc.multiply passes"],
+  "failing": ["calc.divide crashes on zero"],
+  "total": 4
+}

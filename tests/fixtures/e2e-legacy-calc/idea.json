@@ -1,0 +1,6 @@
+{
+  "title": "Fix divide-by-zero bug in tiny-calc CLI",
+  "description": "The existing divide operation crashes when divisor is zero. Patch src/calc.ts to return Infinity or throw a DivideByZeroError.",
+  "source": "user",
+  "mode": "brownfield"
+}
