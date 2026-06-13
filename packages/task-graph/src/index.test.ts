@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { TaskGraph, legalTransition, validateFilesWithinScope, runSequentialScheduler, runParallelScheduler, computeSpawnPlan, recordSpawnPlan, isCompetitiveDebugEnabled, detectHotFiles } from './index';
+import { TaskGraph, legalTransition, validateFilesWithinScope, runSequentialScheduler, runParallelScheduler, computeSpawnPlan, recordSpawnPlan, isCompetitiveDebugEnabled, detectHotFiles, isDirectionSafe } from './index';
 import type { IsolationPool, SpawnCandidate } from './index';
 import type { StoryRecord } from '@codeharness/harness-core';
 import { readJsonl } from '@codeharness/event-log';
@@ -300,5 +300,18 @@ describe('parallel-scheduler', () => {
     });
     // Overlap causes serialization — both stories still run, just not in the same batch
     expect(order.length).toBe(2);
+  });
+});
+
+// ── STORY-022.7: Direction safety gate ───────────────────────────────────────
+
+describe('direction-safety', () => {
+  it('is_direction_safe_blocks_widen', () => {
+    expect(isDirectionSafe({ direction_type: 'widen_write_set' })).toBe(false);
+  });
+
+  it('is_direction_safe_allows_safe_types', () => {
+    expect(isDirectionSafe({ direction_type: 'change_implementation' })).toBe(true);
+    expect(isDirectionSafe(null)).toBe(true);
   });
 });

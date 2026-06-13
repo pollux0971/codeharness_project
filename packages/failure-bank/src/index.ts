@@ -32,6 +32,12 @@ export interface FailureGene {
   consolidated_count: number;  // 1 = first occurrence; ≥2 = recurring/systemic
   resolved_at: string | null;
   status: GeneStatus;
+  resolved_direction?: {
+    direction_type: string;
+    rationale_summary: string;
+    resolved_in_story: string;
+  } | null;
+  proven_remedy?: string | null;  // compact ≤200 char summary of what worked; injected as hint
 }
 
 export interface WarningBank {
@@ -169,6 +175,45 @@ export function consolidate(bank: WarningBank): { merged: number; archived: numb
 /** Check whether `gene.consolidated_count` marks a recurring/systemic pattern. */
 export function isSystemic(gene: FailureGene, cfg: BankConfig = DEFAULT_CONFIG): boolean {
   return gene.consolidated_count >= cfg.recurringThreshold;
+}
+
+/**
+ * Pure function: returns a copy of `gene` paired with the given resolved direction.
+ * Sets `status` to 'resolved', `resolved_at` to now, and `proven_remedy` to the
+ * first 200 chars of the direction rationale. Does not mutate the original.
+ */
+export function pairResolvedDirection(
+  gene: FailureGene,
+  direction: { direction_type: string; rationale: string },
+  resolvedInStory: string,
+): FailureGene {
+  return {
+    ...gene,
+    resolved_direction: {
+      direction_type: direction.direction_type,
+      rationale_summary: direction.rationale.slice(0, 200),
+      resolved_in_story: resolvedInStory,
+    },
+    proven_remedy: direction.rationale.slice(0, 200),
+    status: 'resolved',
+    resolved_at: new Date().toISOString(),
+  };
+}
+
+/**
+ * Return up to `maxRemedies` resolved genes whose signal matches `context`,
+ * sorted descending by consolidated_count (most recurring resolved first).
+ */
+export function preloadProvenRemedies(
+  bank: WarningBank,
+  context: string,
+  maxRemedies: number = 3,
+): { gene: FailureGene; proven_remedy: string }[] {
+  return bank.bank
+    .filter(g => g.status === 'resolved' && g.proven_remedy != null && g.proven_remedy !== '' && signalMatches(g, context))
+    .sort((a, b) => b.consolidated_count - a.consolidated_count)
+    .slice(0, maxRemedies)
+    .map(g => ({ gene: g, proven_remedy: g.proven_remedy! }));
 }
 
 // ── Validation ─────────────────────────────────────────────────────────────

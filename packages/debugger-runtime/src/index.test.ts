@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
   classifyFailure, buildFailureSignature, decideRepairRoute, emitFailureGene,
-  runDebugLoop, runCompetitiveDebug,
+  runDebugLoop, runCompetitiveDebug, seedDirections,
   type DebugLoopInput, type DebugContext, type BankGene, type FailureBankOps,
-  type CompetitiveDebugOptions, type RepairAttempt,
+  type CompetitiveDebugOptions, type RepairAttempt, type ImprovementDirection,
 } from './index';
 
 describe('debugger-runtime', () => {
@@ -419,5 +419,71 @@ describe('STORY-008.4 attempt_budget_exhaustion_escalates', () => {
     // No checkpoint fields on the result
     expect((result as Record<string, unknown>)['checkpoint']).toBeUndefined();
     expect((result as Record<string, unknown>)['branch']).toBeUndefined();
+  });
+});
+
+// ── STORY-022.7: Direction-seeding tests ──────────────────────────────────────
+
+const dir = (type: string): ImprovementDirection => ({
+  direction_type: type as ImprovementDirection['direction_type'],
+  rationale: `Fix via ${type}`,
+  affected_files: ['src/a.ts'],
+});
+const widenDir: ImprovementDirection = {
+  direction_type: 'widen_write_set',
+  rationale: 'Widen scope',
+  affected_files: [],
+};
+
+const baseStory: Parameters<typeof runCompetitiveDebug>[0]['story'] = {
+  story_id: 'S-7', epic_id: 'E-1', depends_on: [],
+  parallelism_class: 'sequential', status: 'in_progress',
+  attempts: 1, attempt_budget: 3, competitive_debug: true, debug_k: 3,
+  branch: null, last_action: null, last_result: null, last_validation: null, blocked_reason: null,
+};
+
+describe('direction-seeding', () => {
+  it('k_candidates_seeded_with_distinct_directions', () => {
+    const directions = [dir('change_implementation'), dir('tighten_test'), dir('clarify_spec')];
+    const seeded = seedDirections(directions, 3);
+    expect(seeded.length).toBe(3);
+    const types = seeded.map(d => d?.direction_type);
+    expect(new Set(types).size).toBe(3);
+  });
+
+  it('scope_expansion_directions_skipped', () => {
+    const directions = [widenDir, dir('change_implementation')];
+    const seeded = seedDirections(directions, 2);
+    expect(seeded.every(d => d?.direction_type !== 'widen_write_set')).toBe(true);
+  });
+
+  it('race_covers_solution_space', async () => {
+    const received: Record<number, string> = {};
+    const directions = [dir('change_implementation'), dir('tighten_test'), dir('clarify_spec')];
+    await runCompetitiveDebug({
+      story: baseStory,
+      diagnosisDirections: directions,
+      debugRepair: async (i, d) => {
+        received[i] = d?.direction_type ?? 'null';
+        return { candidate_id: i, passed: true };
+      },
+    });
+    const types = Object.values(received);
+    expect(new Set(types).size).toBe(3);
+  });
+
+  it('first_validator_pass_wins', async () => {
+    const directions = [dir('change_implementation'), dir('tighten_test'), dir('clarify_spec')];
+    const result = await runCompetitiveDebug({
+      story: baseStory,
+      diagnosisDirections: directions,
+      debugRepair: async (i, _d) => ({ candidate_id: i, passed: i === 1 }),
+    });
+    expect(result.winner_candidate).toBe(1);
+  });
+
+  it('all_scope_expansion_leaves_null_seeds', () => {
+    const seeded = seedDirections([widenDir], 2);
+    expect(seeded).toEqual([null, null]);
   });
 });

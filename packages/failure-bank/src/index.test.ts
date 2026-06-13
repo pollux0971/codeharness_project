@@ -5,6 +5,7 @@ import path from 'node:path';
 import {
   loadBank, saveBank, consolidate, validateFailureGene,
   injectRelevant, formatForInjection,
+  pairResolvedDirection, preloadProvenRemedies,
   type FailureGene, type WarningBank,
 } from './index';
 
@@ -226,4 +227,74 @@ describe('failure-bank STORY-008.3', () => {
     expect(validateFailureGene(makeGene()).ok).toBe(true);
   });
 
+});
+
+// ── STORY-022.5: resolved-direction pairing and remedy preloading ─────────────
+
+function makeActiveGene(signal = 'src:calc|type:runtime_error'): FailureGene {
+  return makeGene({ matching_signal: signal });
+}
+
+describe('failure-bank-remedy', () => {
+  it('resolved_direction_paired_to_gene', () => {
+    const gene = makeActiveGene();
+    const paired = pairResolvedDirection(
+      gene,
+      { direction_type: 'change_implementation', rationale: 'Add zero guard.' },
+      'STORY-Y',
+    );
+    expect(paired.resolved_direction?.direction_type).toBe('change_implementation');
+    expect(paired.status).toBe('resolved');
+    expect(paired.resolved_at).toBeTruthy();
+  });
+
+  it('proven_remedy_preloaded_on_match', () => {
+    const gene = makeActiveGene();
+    const resolved = pairResolvedDirection(
+      gene,
+      { direction_type: 'change_implementation', rationale: 'Add guard.' },
+      'STORY-Y',
+    );
+    const bank: WarningBank = { schema_version: '1', updated_at: '', bank: [resolved] };
+    const remedies = preloadProvenRemedies(bank, 'calc runtime_error divide');
+    expect(remedies.length).toBe(1);
+    expect(remedies[0].proven_remedy).toBeTruthy();
+  });
+
+  it('remedy_pairing_is_advisory_not_binding', () => {
+    const gene = makeActiveGene();
+    const originalStatus = gene.status;
+    const originalResolved = gene.resolved_direction;
+    pairResolvedDirection(gene, { direction_type: 'change_implementation', rationale: 'X' }, 'STORY-Y');
+    expect(gene.status).toBe(originalStatus);
+    expect(gene.resolved_direction).toBe(originalResolved);
+  });
+
+  it('no_remedies_when_no_match', () => {
+    const gene = makeActiveGene();
+    const resolved = pairResolvedDirection(
+      gene,
+      { direction_type: 'change_implementation', rationale: 'Fix' },
+      'STORY-Y',
+    );
+    const bank: WarningBank = { schema_version: '1', updated_at: '', bank: [resolved] };
+    expect(preloadProvenRemedies(bank, 'completely unrelated context')).toHaveLength(0);
+  });
+
+  it('unresolved_genes_not_preloaded', () => {
+    const gene = makeActiveGene();
+    const bank: WarningBank = { schema_version: '1', updated_at: '', bank: [gene] };
+    expect(preloadProvenRemedies(bank, 'calc runtime_error divide')).toHaveLength(0);
+  });
+
+  it('pair_resolved_direction_truncates_remedy_to_200', () => {
+    const gene = makeActiveGene();
+    const longRationale = 'A'.repeat(300);
+    const paired = pairResolvedDirection(
+      gene,
+      { direction_type: 'change_implementation', rationale: longRationale },
+      'STORY-Y',
+    );
+    expect((paired.proven_remedy ?? '').length).toBeLessThanOrEqual(200);
+  });
 });

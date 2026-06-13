@@ -5,6 +5,7 @@
  * and signature-building are deterministic; root-cause/repair generation is a later phase.
  * Spec: codeharness/docs/agents/04_DEBUGGER_AGENT.md, codeharness/docs/contracts/FAILURE_GENE.md
  */
+export type { ImprovementDirection } from '@codeharness/validator-suite';
 export type FailureType = 'test' | 'typecheck' | 'lint' | 'runtime' | 'schema' | 'integration';
 
 /** Classify a failure from the failed command + log text. */
@@ -61,6 +62,7 @@ export function emitFailureGene(args: {
 }
 
 // ── STORY-017.4: Competitive Debug Race ──────────────────────────────────────
+import type { ImprovementDirection } from '@codeharness/validator-suite';
 
 /** Locally-typed story record extended with competitive debug fields. Structurally
  *  compatible with StoryRecord from @codeharness/harness-core without the import. */
@@ -96,18 +98,37 @@ export interface CompetitiveDebugResult {
 
 export interface CompetitiveDebugOptions {
   story: CompetitiveStoryRecord;
-  /** Called once per candidate (0-indexed). Returns pass/fail + optional gene for losers. */
-  debugRepair: (candidate: number) => Promise<RepairAttempt>;
+  /** Called once per candidate (0-indexed) with its seeded direction (or null). */
+  debugRepair: (candidate: number, direction: ImprovementDirection | null) => Promise<RepairAttempt>;
   /** How many candidates to race. Default: story.debug_k ?? 2. */
   k?: number;
+  /** If provided, candidates receive distinct seeded directions. */
+  diagnosisDirections?: ImprovementDirection[];
+}
+
+/**
+ * Assign a distinct direction to each candidate.
+ * `widen_write_set` directions are skipped (decision_matrix rule 17 — never auto-seed scope expansion).
+ * Wraps around if k > safe directions. Returns null-filled array when no safe directions remain.
+ */
+export function seedDirections(
+  directions: ImprovementDirection[],
+  k: number,
+): (ImprovementDirection | null)[] {
+  const safe = directions.filter(d => d.direction_type !== 'widen_write_set');
+  if (safe.length === 0) return Array<ImprovementDirection | null>(k).fill(null);
+  return Array.from({ length: k }, (_, i) => safe[i % safe.length]);
 }
 
 /** Launch k debug candidates concurrently; select the first passing one as winner.
  *  All candidates run to completion (Promise.all). Loser failure genes are recorded. */
 export async function runCompetitiveDebug(opts: CompetitiveDebugOptions): Promise<CompetitiveDebugResult> {
   const k = opts.k ?? opts.story.debug_k ?? 2;
+  const seeded = opts.diagnosisDirections
+    ? seedDirections(opts.diagnosisDirections, k)
+    : Array<ImprovementDirection | null>(k).fill(null);
   const attempts = await Promise.all(
-    Array.from({ length: k }, (_, i) => opts.debugRepair(i)),
+    Array.from({ length: k }, (_, i) => opts.debugRepair(i, seeded[i])),
   );
   const winner = attempts.find(a => a.passed === true);
   const losers = attempts.filter(a => a.passed === false);

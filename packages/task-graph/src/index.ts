@@ -129,6 +129,13 @@ export function detectHotFiles(stories: { allowed_write_set?: string[] }[]): str
   return Array.from(counts.entries()).filter(([, n]) => n >= 2).map(([f]) => f);
 }
 
+// ── STORY-022.7: Direction safety gate ───────────────────────────────────────
+
+/** Returns false when the direction is a scope-expansion (widen_write_set), true otherwise. */
+export function isDirectionSafe(direction: { direction_type: string } | null): boolean {
+  return direction?.direction_type !== 'widen_write_set';
+}
+
 export type { SchedulerResult, SchedulerRunOptions, ParallelSchedulerOptions, IsolationPool } from './scheduler.js';
 export { runSequentialScheduler, runParallelScheduler } from './scheduler.js';
 export type { SpawnCandidate, SpawnPlan } from './spawn-plan.js';

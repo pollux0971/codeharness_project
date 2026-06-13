@@ -115,6 +115,26 @@
         "superseded"
       ],
       "description": "active = still relevant; resolved = root cause fixed; superseded = replaced by a more general gene"
+    },
+    "resolved_direction": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["direction_type", "rationale_summary", "resolved_in_story"],
+          "properties": {
+            "direction_type":     { "type": "string" },
+            "rationale_summary":  { "type": "string", "maxLength": 200 },
+            "resolved_in_story":  { "type": "string" }
+          }
+        },
+        { "type": "null" }
+      ]
+    },
+    "proven_remedy": {
+      "oneOf": [
+        { "type": "string", "maxLength": 200 },
+        { "type": "null" }
+      ]
     }
   },
   "examples": [
