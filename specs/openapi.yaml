@@ -1,0 +1,672 @@
+openapi: 3.1.0
+info:
+  title: CodeHarness API
+  version: 1.0.0
+  description: >
+    REST API for the CodeHarness agentic coding platform.
+    Every endpoint reflects the live trace; terminal states are first-class.
+
+paths:
+  /health:
+    get:
+      operationId: healthCheck
+      summary: Health check
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [ok] }
+
+  /runs:
+    get:
+      operationId: listRuns
+      summary: List all runs
+      responses:
+        '200':
+          description: Array of run summaries
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/RunSummary' }
+    post:
+      operationId: createRun
+      summary: Start a new run
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateRunRequest' }
+      responses:
+        '202':
+          description: Run created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  run_id: { type: string }
+
+  /runs/{id}:
+    get:
+      operationId: getRun
+      summary: Get run state including terminal status
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Run detail
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RunDetail' }
+        '404':
+          description: Run not found
+
+  /runs/{id}/stop:
+    post:
+      operationId: stopRun
+      summary: Abort a run (transitions to ABORTED terminal state)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Run aborted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  run_id: { type: string }
+                  status: { $ref: '#/components/schemas/RunStatus' }
+        '404':
+          description: Run not found
+        '409':
+          description: Run is already in a terminal state
+
+  /runs/{id}/events:
+    get:
+      operationId: listTraceEvents
+      summary: List trace events for a run
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - name: since
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+          description: Return only events after this timestamp
+        - name: type
+          in: query
+          required: false
+          schema: { type: string }
+          description: Filter by event type
+      responses:
+        '200':
+          description: Array of trace events
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/TraceEvent' }
+
+  /ideas:
+    post:
+      operationId: createIdea
+      summary: Submit a new idea for intake
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [idea_text]
+              properties:
+                idea_text: { type: string }
+                mode: { enum: [greenfield, brownfield, patch] }
+      responses:
+        '202':
+          description: Idea accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  idea_id: { type: string }
+
+  /stories:
+    get:
+      operationId: listStories
+      summary: List all stories with admission status
+      parameters:
+        - name: epic_id
+          in: query
+          required: false
+          schema: { type: string }
+        - name: status
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        '200':
+          description: Array of story records
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/StoryRecord' }
+
+  /stories/{id}:
+    get:
+      operationId: getStory
+      summary: Get a specific story record
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Story record
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StoryRecord' }
+        '404':
+          description: Story not found
+
+  /contracts/{storyId}:
+    get:
+      operationId: getContract
+      summary: Get the harness contract for a story
+      parameters:
+        - { name: storyId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Harness contract
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HarnessContract' }
+        '404':
+          description: Contract not found
+
+  /artifacts:
+    get:
+      operationId: listArtifacts
+      summary: List workspace artifacts
+      parameters:
+        - name: run_id
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        '200':
+          description: Array of artifact metadata
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ArtifactMeta' }
+
+  /artifacts/{path}:
+    get:
+      operationId: downloadArtifact
+      summary: Download a specific artifact by path
+      parameters:
+        - name: path
+          in: path
+          required: true
+          schema: { type: string }
+          description: URL-encoded artifact path
+      responses:
+        '200':
+          description: Binary artifact content
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '404':
+          description: Artifact not found
+
+  /permissions/check:
+    post:
+      operationId: checkPermission
+      summary: Check whether an agent action is allowed by the Permission Gateway
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PermissionCheckRequest' }
+      responses:
+        '200':
+          description: Permission check result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PermissionCheckResult' }
+
+  /validation/{storyId}/results:
+    get:
+      operationId: getValidationResults
+      summary: Get validation results for a story
+      parameters:
+        - { name: storyId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Validation results
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ValidationResults' }
+        '404':
+          description: No validation results for this story
+
+  /checkpoints:
+    get:
+      operationId: listCheckpoints
+      summary: List all checkpoints
+      parameters:
+        - name: story_id
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        '200':
+          description: Array of checkpoint entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/CheckpointEntry' }
+
+  /checkpoints/{id}/resume:
+    post:
+      operationId: resumeFromCheckpoint
+      summary: Resume a run from a checkpoint
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '202':
+          description: Run resumed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  run_id: { type: string }
+        '404':
+          description: Checkpoint not found
+
+  /promotions:
+    post:
+      operationId: requestPromotion
+      summary: Request promotion of a workspace change to stable
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [story_id]
+              properties:
+                story_id: { type: string }
+                notes: { type: string }
+      responses:
+        '202':
+          description: Promotion requested
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  promotion_id: { type: string }
+    get:
+      operationId: listPromotions
+      summary: List all promotion requests
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema: { enum: [pending, approved, denied, rolled_back] }
+      responses:
+        '200':
+          description: Array of promotion entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/PromotionEntry' }
+
+  /promotions/{id}/review:
+    post:
+      operationId: reviewPromotion
+      summary: Human approval or denial of a promotion (human gate)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision: { enum: [approved, denied] }
+                reason: { type: string }
+      responses:
+        '200':
+          description: Decision recorded
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PromotionEntry' }
+        '404':
+          description: Promotion not found
+        '409':
+          description: Promotion is not in pending state
+
+  /promotions/{id}/rollback:
+    post:
+      operationId: rollbackPromotion
+      summary: Roll back a previously approved promotion
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '202':
+          description: Rollback initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  promotion_id: { type: string }
+                  status: { enum: [rolled_back] }
+        '404':
+          description: Promotion not found
+
+  /gates:
+    get:
+      operationId: listGates
+      summary: List all open gates with SLA status
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema: { enum: [waiting, timed_out, resolved] }
+      responses:
+        '200':
+          description: Array of open gate statuses
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/GateStatus' }
+
+components:
+  schemas:
+    TraceEvent:
+      type: object
+      description: >
+        A single append-only trace event. Event types defined in
+        codeharness/specs/trace_event.schema.json. Unknown types MUST
+        be rendered as a flagged raw line, never silently dropped.
+      required: [event_id, run_id, type, timestamp]
+      properties:
+        event_id:
+          type: string
+        run_id:
+          type: string
+        type:
+          type: string
+          enum:
+            - idea_event
+            - planning_event
+            - context_packet_event
+            - agent_output_event
+            - tool_request_event
+            - permission_decision_event
+            - execution_event
+            - validation_event
+            - approval_event
+            - promotion_event
+            - rollback_event
+            - reasoning_event
+            - tool_call_event
+            - dispatch_event
+            - gateway_event
+            - validator_event
+            - workspace_event
+            - story_manager_event
+        timestamp:
+          type: string
+          format: date-time
+        agent_role:
+          type: string
+        pane_renderable:
+          type: boolean
+        artifact_refs:
+          type: array
+          items: { type: string }
+        payload:
+          type: object
+
+    RunStatus:
+      type: string
+      enum: [running, failed, aborted, cancelled, done]
+      description: >
+        Terminal states are: failed (validation/error), aborted (user or
+        system stop), cancelled (queued run dropped). Non-terminal: running.
+        Completed: done. (STORY-027.1)
+
+    RunSummary:
+      type: object
+      required: [run_id, status, started_at]
+      properties:
+        run_id:
+          type: string
+        status:
+          $ref: '#/components/schemas/RunStatus'
+        started_at:
+          type: string
+          format: date-time
+        story_id:
+          type: string
+          nullable: true
+
+    RunDetail:
+      allOf:
+        - $ref: '#/components/schemas/RunSummary'
+        - type: object
+          properties:
+            ended_at:
+              type: string
+              format: date-time
+              nullable: true
+            terminal_cause:
+              type: object
+              nullable: true
+              description: Present only when status is a terminal state
+              properties:
+                trigger:
+                  type: string
+                  description: What triggered the terminal transition
+                reason:
+                  type: string
+                  description: Human-readable cause
+
+    CreateRunRequest:
+      type: object
+      required: [idea_text]
+      properties:
+        idea_text:
+          type: string
+        mode:
+          type: string
+          enum: [greenfield, brownfield, patch]
+          default: greenfield
+
+    StoryRecord:
+      type: object
+      required: [story_id, epic_id, status]
+      properties:
+        story_id:
+          type: string
+        epic_id:
+          type: string
+        status:
+          type: string
+          enum: [todo, in_progress, validating, debugging, passed, checkpointed, blocked, escalated, done]
+        parallelism_class:
+          type: string
+          enum: [sequential, parallel]
+        depends_on:
+          type: array
+          items: { type: string }
+        last_action:
+          type: string
+          nullable: true
+        last_result:
+          type: string
+          nullable: true
+        blocked_reason:
+          type: string
+          nullable: true
+
+    HarnessContract:
+      type: object
+      required: [story_id, allowed_write_set, forbidden_actions]
+      properties:
+        story_id:
+          type: string
+        allowed_write_set:
+          type: array
+          items: { type: string }
+          description: Paths the developer agent may write
+        forbidden_actions:
+          type: array
+          items: { type: string }
+          description: Explicitly disallowed operations for this story
+        validation_commands:
+          type: array
+          items: { type: string }
+        rollback_notes:
+          type: string
+          nullable: true
+
+    ArtifactMeta:
+      type: object
+      required: [path, kind]
+      properties:
+        path:
+          type: string
+        kind:
+          type: string
+          enum: [file, dir]
+        size:
+          type: integer
+          description: Size in bytes (null for dir)
+          nullable: true
+        run_id:
+          type: string
+          nullable: true
+
+    PermissionCheckRequest:
+      type: object
+      required: [agent, action, resource]
+      properties:
+        agent:
+          type: string
+          description: Agent role (planning_steward, supervisor, developer, debugger)
+        action:
+          type: string
+          description: Action being requested (read, write, execute, etc.)
+        resource:
+          type: string
+          description: Target resource path or identifier
+
+    PermissionCheckResult:
+      type: object
+      required: [allowed]
+      properties:
+        allowed:
+          type: boolean
+        decision:
+          type: string
+          enum: [allow, ask, deny]
+        reason:
+          type: string
+          nullable: true
+
+    ValidationResults:
+      type: object
+      required: [story_id, ok]
+      properties:
+        story_id:
+          type: string
+        ok:
+          type: boolean
+        errors:
+          type: array
+          items: { type: string }
+        run_at:
+          type: string
+          format: date-time
+          nullable: true
+        commands_run:
+          type: array
+          items: { type: string }
+
+    CheckpointEntry:
+      type: object
+      required: [checkpoint_id, story_id]
+      properties:
+        checkpoint_id:
+          type: string
+        story_id:
+          type: string
+        commit_sha:
+          type: string
+          nullable: true
+        is_resume_entry:
+          type: boolean
+          default: false
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    PromotionEntry:
+      type: object
+      required: [promotion_id, story_id, status]
+      properties:
+        promotion_id:
+          type: string
+        story_id:
+          type: string
+        status:
+          type: string
+          enum: [pending, approved, denied, rolled_back]
+        promoted_at:
+          type: string
+          format: date-time
+          nullable: true
+        reviewer_notes:
+          type: string
+          nullable: true
+
+    GateStatus:
+      type: object
+      required: [gate_id, gate_type, sla_status]
+      properties:
+        gate_id:
+          type: string
+        gate_type:
+          type: string
+          description: e.g. human_approval, promotion, trust_boundary
+        elapsed_seconds:
+          type: integer
+          description: Seconds since gate was opened
+        sla_status:
+          type: string
+          enum: [waiting, timed_out, resolved]
+        story_id:
+          type: string
+          nullable: true
+        opened_at:
+          type: string
+          format: date-time
+          nullable: true
