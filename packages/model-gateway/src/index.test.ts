@@ -13,6 +13,9 @@ import {
   createFixtureProvider,
   createManualProvider,
   createRealProvider,
+  createApiKeyProvider,
+  validateApiKey,
+  buildValidatedProviderMetadata,
   createScriptedProvider,
   guardedCall,
   ProviderRegistry,
@@ -25,6 +28,7 @@ import {
   budgetConfigFromSettings,
   type DeveloperOutput,
   type RealProviderHttpClient,
+  type TypedSecretHandle,
   type RoutingConfig,
   type ModelRegistryConfig,
   type TierLadder,
@@ -170,6 +174,83 @@ describe('real-provider-adapter', () => {
     expect(r.ok).toBe(false);
     expect(r.errors.join(' ')).not.toContain('SECRET_VALUE');
     expect(r.errors.join(' ')).toMatch(/429|failed/i);
+  });
+});
+
+describe('api-key-auth (STORY-028.1)', () => {
+  const handle: TypedSecretHandle = { handle_id: 'provider.openai.default', handle_type: 'api_key', provider: 'openai' };
+  const SECRET = 'sk-LIVE-SECRET-VALUE';
+  const baseUrl = 'https://api.openai.com/v1';
+
+  it('api_key_auth_path_exists', async () => {
+    const mockHttp: RealProviderHttpClient = async () => ({
+      ok: true, status: 200,
+      json: async () => ({ choices: [{ message: { content: JSON.stringify(goodDeveloperOutput) } }], usage: { prompt_tokens: 5, completion_tokens: 7 } }),
+    });
+    const p = createApiKeyProvider({ handle, resolveSecret: async () => SECRET, baseUrl, httpClient: mockHttp, enabled: true });
+    expect(p.kind).toBe('llm_remote');
+    const r = await callProvider(p, req);
+    expect(r.ok).toBe(true);
+    expect(r.output?.kind).toBe('patch_proposal');
+  });
+
+  it('key_loaded_via_typed_secret_handle', async () => {
+    const seen: TypedSecretHandle[] = [];
+    let bearer = '';
+    const mockHttp: RealProviderHttpClient = async (_url, init) => {
+      bearer = init.headers['Authorization'];
+      return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: JSON.stringify(goodDeveloperOutput) } }], usage: {} }) };
+    };
+    const resolveSecret = async (h: TypedSecretHandle) => { seen.push(h); return SECRET; };
+    const p = createApiKeyProvider({ handle, resolveSecret, baseUrl, httpClient: mockHttp, enabled: true });
+    await callProvider(p, req);
+    expect(seen).toEqual([handle]);                  // resolved via the typed handle
+    expect(bearer).toBe(`Bearer ${SECRET}`);          // and used as the bearer credential
+  });
+
+  it('rejects_non_api_key_handle', () => {
+    const oauthHandle: TypedSecretHandle = { handle_id: 'provider.codex.oauth', handle_type: 'oauth_token', provider: 'codex' };
+    expect(() => createApiKeyProvider({ handle: oauthHandle, resolveSecret: async () => SECRET, baseUrl, enabled: true })).toThrow(/api_key handle/);
+  });
+
+  it('validation_call_gated_by_real_api_calls', async () => {
+    let called = false;
+    const mockHttp: RealProviderHttpClient = async () => { called = true; return { ok: true, status: 200, json: async () => ({ data: [{ id: 'gpt-5.5' }] }) }; };
+    // Gate closed → no network call, gated_off reported.
+    const off = await validateApiKey({ handle, resolveSecret: async () => SECRET, baseUrl, enabled: false, httpClient: mockHttp });
+    expect(called).toBe(false);
+    expect(off.gated_off).toBe(true);
+    expect(off.ok).toBe(false);
+    // Gate open → call runs, models counted.
+    const on = await validateApiKey({ handle, resolveSecret: async () => SECRET, baseUrl, enabled: true, httpClient: mockHttp });
+    expect(called).toBe(true);
+    expect(on.ok).toBe(true);
+    expect(on.gated_off).toBe(false);
+    expect(on.models_available).toBe(1);
+  });
+
+  it('only_non_secret_metadata_persisted', async () => {
+    const mockHttp: RealProviderHttpClient = async () => ({ ok: true, status: 200, json: async () => ({ data: [{ id: 'a' }, { id: 'b' }] }) });
+    const v = await validateApiKey({ handle, resolveSecret: async () => SECRET, baseUrl, enabled: true, httpClient: mockHttp });
+    const meta = buildValidatedProviderMetadata(handle, baseUrl, v, '2026-06-14T00:00:00Z');
+    const serialized = JSON.stringify(meta);
+    expect(serialized).not.toContain(SECRET);
+    expect(meta).toMatchObject({ provider: 'openai', base_url: baseUrl, validated_at: '2026-06-14T00:00:00Z', models_available: 2 });
+    expect(Object.values(meta)).not.toContain(SECRET);
+  });
+
+  it('key_never_in_trace_or_context', async () => {
+    // Error body echoes the key — it must not appear in the redacted result.
+    const leaky: RealProviderHttpClient = async () => ({ ok: false, status: 401, json: async () => ({ error: `invalid key ${SECRET}` }) });
+    const v = await validateApiKey({ handle, resolveSecret: async () => SECRET, baseUrl, enabled: true, httpClient: leaky });
+    expect(v.ok).toBe(false);
+    expect(JSON.stringify(v)).not.toContain(SECRET);
+    expect(v.error).toMatch(/HTTP 401/);
+    // The provider call path is equally redacted on HTTP error.
+    const p = createApiKeyProvider({ handle, resolveSecret: async () => SECRET, baseUrl, httpClient: leaky, enabled: true });
+    const r = await callProvider(p, req);
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(' ')).not.toContain(SECRET);
   });
 });
 

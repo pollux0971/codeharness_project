@@ -245,6 +245,123 @@ export function createRealProvider(opts: RealProviderOptions): ModelProvider {
   };
 }
 
+// ── API-key provider auth (STORY-028.1) ─────────────────────────────────────
+// A first-class alternative to Codex OAuth (011.1) for OpenAI-compatible
+// providers (api_key + base_url). The credential is referenced by a typed
+// secret handle and resolved by the Secret Broker only at call time; the raw
+// value never enters agent context, a trace event, or persisted config.
+
+export type SecretHandleType = 'api_key' | 'oauth_token' | 'env_var';
+
+/** A typed reference to a brokered credential — never the value itself.
+ *  Mirrors specs/secret_handle.schema.json (027.7). */
+export interface TypedSecretHandle {
+  handle_id: string;          // e.g. 'provider.openai.default'
+  handle_type: SecretHandleType;
+  provider: string;           // e.g. 'openai'
+}
+
+/** Resolves a typed handle to its raw secret. Supplied by the Secret Broker.
+ *  The returned value is used only as a bearer credential and never logged. */
+export type SecretResolver = (handle: TypedSecretHandle) => Promise<string>;
+
+export interface ApiKeyProviderOptions {
+  id?: string;
+  handle: TypedSecretHandle;
+  resolveSecret: SecretResolver;
+  baseUrl: string;            // OpenAI-compatible base, e.g. https://api.openai.com/v1
+  httpClient?: RealProviderHttpClient;
+  enabled: boolean;           // mirrors the real_api_calls gate
+}
+
+/** Build a live provider authenticated by an API key drawn from a typed handle.
+ *  Reuses the createRealProvider call path (and its error redaction), so the key
+ *  can never leak through an error body, and is a CI-safe no-op when disabled. */
+export function createApiKeyProvider(opts: ApiKeyProviderOptions): ModelProvider {
+  if (opts.handle.handle_type !== 'api_key') {
+    throw new Error(`createApiKeyProvider requires an api_key handle, got: ${opts.handle.handle_type}`);
+  }
+  return createRealProvider({
+    id: opts.id ?? `${opts.handle.provider}-apikey`,
+    enabled: opts.enabled,
+    endpoint: `${opts.baseUrl.replace(/\/$/, '')}/chat/completions`,
+    httpClient: opts.httpClient,
+    // The handle is resolved to the key only at call time; never held in a field.
+    getAccessToken: () => opts.resolveSecret(opts.handle),
+  });
+}
+
+export interface ApiKeyValidationResult {
+  ok: boolean;
+  gated_off: boolean;          // true when the gate was closed and NO call was made
+  status: number | null;
+  models_available: number | null;
+  error?: string;              // redacted: status only, never the key or a body echo
+}
+
+export interface ApiKeyValidationOptions {
+  handle: TypedSecretHandle;
+  resolveSecret: SecretResolver;
+  baseUrl: string;
+  enabled: boolean;            // real_api_calls gate
+  httpClient?: RealProviderHttpClient;
+}
+
+/** Lightweight liveness/auth check via GET {baseUrl}/models. A no-op when the
+ *  real_api_calls gate is closed (no network, CI-safe). The key never appears
+ *  in the returned result or in any error string. */
+export async function validateApiKey(opts: ApiKeyValidationOptions): Promise<ApiKeyValidationResult> {
+  if (!opts.enabled) {
+    return { ok: false, gated_off: true, status: null, models_available: null, error: 'real_api_calls gate closed: validation skipped' };
+  }
+  const httpClient = opts.httpClient ?? (fetch as unknown as RealProviderHttpClient);
+  const key = await opts.resolveSecret(opts.handle);
+  try {
+    const res = await httpClient(`${opts.baseUrl.replace(/\/$/, '')}/models`, {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+    });
+    if (!res.ok) {
+      // Redact: status only. The response body could echo the credential, so it is never read into the result.
+      return { ok: false, gated_off: false, status: res.status, models_available: null, error: `validation failed: HTTP ${res.status}` };
+    }
+    const data = await res.json() as { data?: unknown[] };
+    const count = Array.isArray(data?.data) ? data.data.length : 0;
+    return { ok: true, gated_off: false, status: res.status, models_available: count };
+  } catch {
+    // Redact: never surface an exception message that may have captured the key.
+    return { ok: false, gated_off: false, status: null, models_available: null, error: 'validation failed: network or client error' };
+  }
+}
+
+export interface ValidatedProviderMetadata {
+  provider: string;
+  base_url: string;
+  handle_id: string;
+  handle_type: SecretHandleType;
+  validated_at: string;
+  models_available: number | null;
+}
+
+/** Produce the ONLY data that may be persisted to config after validation:
+ *  non-secret provider metadata. The raw key is not an input here, so it can
+ *  never be persisted by construction. */
+export function buildValidatedProviderMetadata(
+  handle: TypedSecretHandle,
+  baseUrl: string,
+  validation: ApiKeyValidationResult,
+  validatedAt: string,
+): ValidatedProviderMetadata {
+  return {
+    provider: handle.provider,
+    base_url: baseUrl,
+    handle_id: handle.handle_id,
+    handle_type: handle.handle_type,
+    validated_at: validatedAt,
+    models_available: validation.models_available,
+  };
+}
+
 export interface ModelRef {
   provider_id: string;
   model_name: string;
