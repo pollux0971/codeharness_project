@@ -3,7 +3,7 @@
  * Owner: STORY-001.2.
  * These types are the canonical source of truth; downstream packages import from here.
  */
-export type AgentRole = 'planning_steward' | 'supervisor' | 'developer' | 'debugger';
+export type AgentRole = 'planning_steward' | 'supervisor' | 'developer' | 'debugger' | 'reviewer';
 export type IdeaMode = 'greenfield' | 'brownfield' | 'patch' | 'checkpoint' | 'research_spike';
 export type TaskClass = IdeaMode;
 export type PermissionDecision = 'allow' | 'ask' | 'deny';
@@ -60,6 +60,15 @@ export interface StoryContract {
     promotion_allowed?: boolean;
     human_gate_required_for?: string[];
     failure_gene_ids?: string[];
+}
+export declare const KNOWN_TRACE_EVENT_TYPES: readonly ['idea_event', 'planning_event', 'context_packet_event', 'agent_output_event', 'tool_request_event', 'permission_decision_event', 'execution_event', 'validation_event', 'approval_event', 'promotion_event', 'rollback_event', 'reasoning_event', 'tool_call_event', 'dispatch_event', 'gateway_event', 'validator_event', 'workspace_event', 'story_manager_event'];
+export type TraceEventType = typeof KNOWN_TRACE_EVENT_TYPES[number];
+export declare function isKnownEventType(type: string): type is TraceEventType;
+export interface UnknownTraceEvent {
+    event_id: string;
+    type: string;
+    raw: unknown;
+    flagged: true;
 }
 /** Validate a StoryContract object — collects ALL errors, not just first. */
 export declare function validateStoryContract(c: Partial<StoryContract>): SharedValidationResult;

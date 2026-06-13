@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   ok, fail, isValidStoryId, isValidEpicId, validateStoryId, validateEpicId,
-  validateStoryContract,
+  validateStoryContract, isKnownEventType, KNOWN_TRACE_EVENT_TYPES,
   type StoryContract, type SharedValidationResult, type ValidationIssue,
 } from './index.js';
 
@@ -129,5 +129,27 @@ describe('STORY-001.2 shared schemas and validation helpers', () => {
     ]);
     expect(r.issues[0].code).toBe('AAA');
     expect(r.issues[1].code).toBe('ZZZ');
+  });
+});
+
+describe('trace-event-types', () => {
+  it('reasoning_tool_dispatch_spine_types_defined', () => {
+    const required = ['reasoning_event', 'tool_call_event', 'dispatch_event', 'gateway_event', 'story_manager_event'];
+    required.forEach(t => expect(KNOWN_TRACE_EVENT_TYPES).toContain(t));
+  });
+
+  it('panes_render_only_schema_valid_events', () => {
+    expect(isKnownEventType('reasoning_event')).toBe(true);
+    expect(isKnownEventType('validation_event')).toBe(true);
+  });
+
+  it('unknown_event_flagged_not_dropped', () => {
+    expect(isKnownEventType('mystery_event')).toBe(false);
+    expect(isKnownEventType('')).toBe(false);
+  });
+
+  it('all_original_types_preserved', () => {
+    const original = ['idea_event', 'planning_event', 'agent_output_event', 'approval_event'];
+    original.forEach(t => expect(KNOWN_TRACE_EVENT_TYPES).toContain(t));
   });
 });

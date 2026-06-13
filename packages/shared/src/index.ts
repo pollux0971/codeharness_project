@@ -51,6 +51,29 @@ export function validateEpicId(id: string): SharedValidationResult {
     : fail([{ code: 'INVALID_EPIC_ID', message: `Epic ID must match EPIC-NNN, got: ${id}` }]);
 }
 
+// ── trace event types ─────────────────────────────────────────────────────────
+export const KNOWN_TRACE_EVENT_TYPES = [
+  'idea_event', 'planning_event', 'context_packet_event', 'agent_output_event',
+  'tool_request_event', 'permission_decision_event', 'execution_event',
+  'validation_event', 'approval_event', 'promotion_event', 'rollback_event',
+  // New in 025.1:
+  'reasoning_event', 'tool_call_event', 'dispatch_event',
+  'gateway_event', 'validator_event', 'workspace_event', 'story_manager_event',
+] as const;
+
+export type TraceEventType = typeof KNOWN_TRACE_EVENT_TYPES[number];
+
+export function isKnownEventType(type: string): type is TraceEventType {
+  return KNOWN_TRACE_EVENT_TYPES.includes(type as TraceEventType);
+}
+
+export interface UnknownTraceEvent {
+  event_id: string;
+  type: string;
+  raw: unknown;
+  flagged: true;
+}
+
 // ── harness / story contract types ───────────────────────────────────────────
 /** Simplified contract used at runtime (matches harness_contract.schema.json). */
 export interface HarnessContract {

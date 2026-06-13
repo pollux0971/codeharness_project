@@ -22,6 +22,18 @@ export function validateEpicId(id) {
         ? ok()
         : fail([{ code: 'INVALID_EPIC_ID', message: `Epic ID must match EPIC-NNN, got: ${id}` }]);
 }
+// ── trace event types ─────────────────────────────────────────────────────────
+export const KNOWN_TRACE_EVENT_TYPES = [
+    'idea_event', 'planning_event', 'context_packet_event', 'agent_output_event',
+    'tool_request_event', 'permission_decision_event', 'execution_event',
+    'validation_event', 'approval_event', 'promotion_event', 'rollback_event',
+    // New in 025.1:
+    'reasoning_event', 'tool_call_event', 'dispatch_event',
+    'gateway_event', 'validator_event', 'workspace_event', 'story_manager_event',
+];
+export function isKnownEventType(type) {
+    return KNOWN_TRACE_EVENT_TYPES.includes(type);
+}
 /** Validate a StoryContract object — collects ALL errors, not just first. */
 export function validateStoryContract(c) {
     const issues = [];

@@ -2,6 +2,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "TraceEvent",
   "type": "object",
+  "$defs": {
+    "unknown_event_rule": {
+      "description": "An event with a type not in this enum MUST be rendered as a flagged raw line, never silently dropped."
+    }
+  },
   "required": [
     "event_id",
     "run_id",
@@ -27,7 +32,14 @@
         "validation_event",
         "approval_event",
         "promotion_event",
-        "rollback_event"
+        "rollback_event",
+        "reasoning_event",
+        "tool_call_event",
+        "dispatch_event",
+        "gateway_event",
+        "validator_event",
+        "workspace_event",
+        "story_manager_event"
       ]
     },
     "timestamp": {
@@ -35,6 +47,9 @@
     },
     "agent_role": {
       "type": "string"
+    },
+    "pane_renderable": {
+      "type": "boolean"
     },
     "artifact_refs": {
       "type": "array",
