@@ -7,29 +7,9 @@
   ],
   "stubs": [
     {
-      "symbol": "applySlidingWindow",
-      "file": "context-manager/src/index.ts",
-      "owner": "ROADMAP:phase-2"
-    },
-    {
-      "symbol": "applySlidingWindow",
-      "file": "context-manager/src/index.ts",
-      "owner": "ROADMAP:phase-2"
-    },
-    {
-      "symbol": "applySlidingWindow",
-      "file": "context-manager/src/index.ts",
-      "owner": "ROADMAP:phase-2"
-    },
-    {
       "symbol": "producePatchProposal",
       "file": "developer-runtime/src/index.ts",
       "owner": "ROADMAP:phase-2"
-    },
-    {
-      "symbol": "writeCheckpoint",
-      "file": "harness-core/src/index.ts",
-      "owner": "STORY-002.1"
     },
     {
       "symbol": "rollbackWorkspace",

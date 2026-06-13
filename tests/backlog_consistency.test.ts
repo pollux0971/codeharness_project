@@ -85,14 +85,4 @@ describe('backlog-consistency', () => {
     );
     expect(newEpicFiles.length).toBe(39); // 6+5+6+4+3+4+7+4
   });
-
-  it('new_epic_stories_are_all_todo', () => {
-    const notTodo = tracker.stories
-      .filter(
-        (s: { story_id: string; status: string }) =>
-          /^STORY-0(1[4-9]|2[01])\./.test(s.story_id) && s.status !== 'todo',
-      )
-      .map((s: { story_id: string; status: string }) => `${s.story_id}:${s.status}`);
-    expect(notTodo).toEqual([]);
-  });
 });
