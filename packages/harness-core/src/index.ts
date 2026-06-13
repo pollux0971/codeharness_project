@@ -734,6 +734,78 @@ export async function transitionToTerminalState(
   };
 }
 
+// ── STORY-027.2: Human gate SLA — timeout, escalation, global gate protection ─
+
+export type GateType = 'promotion_review' | 'approval_request' | 'hold_release';
+export type EscalationPolicy = 're_notify' | 'auto_deny' | 'auto_approve';
+
+export const GLOBAL_GATES_NO_AUTO_CLOSE = [
+  'real_api_calls', 'sudo_broker_runtime', 'bypass_workspace_runtime', 'stable_promotion',
+] as const;
+
+export interface GateSlaConfig {
+  gate_type: GateType;
+  timeout_seconds: number;
+  escalation_policy: EscalationPolicy;
+  is_security_gate?: boolean;
+}
+
+export interface GateSlaResult {
+  gate_type: GateType;
+  elapsed_seconds: number;
+  timed_out: boolean;
+  action_taken: EscalationPolicy | 'waiting' | 'blocked_global_gate';
+  trace_event_id: string;
+}
+
+export async function evaluateGateSla(
+  config: GateSlaConfig,
+  elapsedSeconds: number,
+  traceLogPath: string
+): Promise<GateSlaResult> {
+  const timed_out = elapsedSeconds >= config.timeout_seconds;
+
+  let action_taken: GateSlaResult['action_taken'];
+
+  if (config.gate_type === 'promotion_review') {
+    // promotion_review is always a global gate — never auto-close
+    action_taken = 'blocked_global_gate';
+  } else if (!timed_out) {
+    action_taken = 'waiting';
+  } else if (config.escalation_policy === 'auto_approve' && config.is_security_gate) {
+    // safety override: security gates can never auto_approve
+    action_taken = 'auto_deny';
+  } else {
+    action_taken = config.escalation_policy;
+  }
+
+  const existing = readJsonl(traceLogPath);
+  const last = existing[existing.length - 1];
+  const event = createTraceEvent({
+    run_id: 'gate-sla',
+    seq: last ? last.seq + 1 : 0,
+    previous_event_hash: last ? (last.hash ?? null) : null,
+    type: 'gate_sla_tick',
+    payload: {
+      gate_type: config.gate_type,
+      elapsed_seconds: elapsedSeconds,
+      timeout_seconds: config.timeout_seconds,
+      timed_out,
+      action_taken,
+      is_security_gate: config.is_security_gate ?? false,
+    },
+  });
+  appendJsonl(traceLogPath, event);
+
+  return {
+    gate_type: config.gate_type,
+    elapsed_seconds: elapsedSeconds,
+    timed_out,
+    action_taken,
+    trace_event_id: event.event_id,
+  };
+}
+
 // ── STORY-023.2: Console message router ──────────────────────────────────────
 
 export type MessageIntent =

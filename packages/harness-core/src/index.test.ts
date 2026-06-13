@@ -44,6 +44,9 @@ import {
   type BacklogTransaction,
   type BacklogDeltaInput,
   type TerminalStateCause,
+  evaluateGateSla,
+  GLOBAL_GATES_NO_AUTO_CLOSE,
+  type GateSlaConfig,
 } from './index.js';
 import { readJsonl } from '@codeharness/event-log';
 import { DEFAULT_SETTINGS } from '@codeharness/settings';
@@ -854,5 +857,53 @@ describe('terminal-states', () => {
     const r = await transitionToTerminalState(cause, trace);
     expect(r.new_state).toBe('cancelled');
     if (existsSync(trace)) unlinkSync(trace);
+  });
+});
+
+// ── STORY-027.2: Gate SLA tests ───────────────────────────────────────────────
+
+describe('gate-sla', () => {
+  const trace = () => join(tmpdir(), `sla-${Date.now()}.jsonl`);
+
+  it('gate_timeout_configurable_per_type', async () => {
+    const t = trace();
+    const cfg: GateSlaConfig = { gate_type: 'approval_request', timeout_seconds: 3600, escalation_policy: 're_notify' };
+    const r = await evaluateGateSla(cfg, 1800, t);
+    expect(r.timed_out).toBe(false);
+    expect(r.action_taken).toBe('waiting');
+    if (existsSync(t)) unlinkSync(t);
+  });
+
+  it('escalation_policy_enforced', async () => {
+    const t = trace();
+    const cfg: GateSlaConfig = { gate_type: 'approval_request', timeout_seconds: 3600, escalation_policy: 'auto_deny' };
+    const r = await evaluateGateSla(cfg, 7200, t);
+    expect(r.timed_out).toBe(true);
+    expect(r.action_taken).toBe('auto_deny');
+    if (existsSync(t)) unlinkSync(t);
+  });
+
+  it('auto_approve_only_for_non_security_gates', async () => {
+    const t = trace();
+    const cfg: GateSlaConfig = { gate_type: 'approval_request', timeout_seconds: 60, escalation_policy: 'auto_approve', is_security_gate: true };
+    const r = await evaluateGateSla(cfg, 120, t);
+    expect(r.action_taken).toBe('auto_deny'); // overridden
+    if (existsSync(t)) unlinkSync(t);
+  });
+
+  it('global_gates_never_auto_close', async () => {
+    const t = trace();
+    const cfg: GateSlaConfig = { gate_type: 'promotion_review', timeout_seconds: 60, escalation_policy: 'auto_approve', is_security_gate: true };
+    const r = await evaluateGateSla(cfg, 9999, t);
+    expect(r.action_taken).toBe('blocked_global_gate');
+    if (existsSync(t)) unlinkSync(t);
+  });
+
+  it('sla_events_in_trace', async () => {
+    const t = trace();
+    await evaluateGateSla({ gate_type: 'hold_release', timeout_seconds: 60, escalation_policy: 're_notify' }, 30, t);
+    const events = readJsonl(t);
+    expect(events[0].type).toBe('gate_sla_tick');
+    if (existsSync(t)) unlinkSync(t);
   });
 });
