@@ -503,6 +503,57 @@ export function resolveProviderIdsFromConfig(
   return [agentConfig.primary, ...(agentConfig.fallbacks ?? [])];
 }
 
+// ── Routing safety (STORY-028.3) ────────────────────────────────────────────
+// Never route an agent to a provider whose adapter is not registered. A
+// boot-time check cross-references every routed provider against the registry
+// and fails CLOSED with a clear escalation, instead of crashing at call time —
+// the exact footgun of routing to 'openai' before the bootstrap registered it.
+
+export interface RoutingValidationResult {
+  ok: boolean;
+  unregistered: string[];     // routed provider ids with no registered adapter
+  escalation: string | null;  // clear, human-facing reason when !ok (never a silent crash)
+}
+
+/** Collect the distinct provider ids referenced anywhere in a routing config
+ *  (agent primaries, fallbacks, and task overrides), mapping 'provider/model'
+ *  refs down to the bare provider id. */
+export function collectRoutedProviderIds(routing: RoutingConfig): string[] {
+  const ids = new Set<string>();
+  const add = (ref: string) => {
+    const parsed = parseModelRef(ref);
+    ids.add(parsed ? parsed.provider_id : ref);
+  };
+  for (const agent of Object.values(routing.agents)) {
+    add(agent.primary);
+    for (const f of agent.fallbacks ?? []) add(f);
+  }
+  for (const overrides of Object.values(routing.task_overrides ?? {})) {
+    for (const ref of Object.values(overrides)) add(ref);
+  }
+  return [...ids];
+}
+
+/** Boot-time routing validation. Returns a fail-closed result — it never throws —
+ *  when any routed provider lacks a registered adapter. */
+export function validateRoutingRegistered(
+  routing: RoutingConfig,
+  registry: ProviderRegistry
+): RoutingValidationResult {
+  const unregistered = collectRoutedProviderIds(routing).filter(id => !registry.has(id));
+  if (unregistered.length === 0) {
+    return { ok: true, unregistered: [], escalation: null };
+  }
+  return {
+    ok: false,
+    unregistered,
+    escalation:
+      `routing references unregistered provider(s): ${unregistered.join(', ')}. ` +
+      `Fail closed — register the adapter (run the live-provider bootstrap with the ` +
+      `real_api_calls gate on) or correct model_routing.yaml before routing to it.`,
+  };
+}
+
 export interface BudgetConfig {
   maxCallsPerStory: number;
   maxTokensPerStory: number;

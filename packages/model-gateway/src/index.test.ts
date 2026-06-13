@@ -17,6 +17,8 @@ import {
   validateApiKey,
   buildValidatedProviderMetadata,
   bootstrapLiveProviders,
+  validateRoutingRegistered,
+  collectRoutedProviderIds,
   createScriptedProvider,
   guardedCall,
   ProviderRegistry,
@@ -299,6 +301,59 @@ describe('live-provider-bootstrap (STORY-028.2)', () => {
     const result = bootstrapLiveProviders({ enabled: true, providers: bootCfg, registry, resolveSecret: async () => 'sk-SECRET', httpClient: okHttp });
     expect(JSON.stringify(result.registered)).not.toContain('sk-SECRET');
     expect(result.registered[0]).toMatchObject({ provider_id: 'openai', provider: 'openai', handle_id: 'provider.openai.default' });
+  });
+});
+
+describe('routing-safety (STORY-028.3)', () => {
+  const fixtureProvider = (id: string): { id: string; kind: 'fixture'; call: () => Promise<unknown> } =>
+    ({ id, kind: 'fixture', call: async () => ({}) });
+
+  it('routing_to_unregistered_provider_fails_closed', () => {
+    const registry = new ProviderRegistry();
+    registry.register(fixtureProvider('scripted'));
+    const routing: RoutingConfig = { agents: { developer: { primary: 'openai/gpt-5.5', fallbacks: ['scripted'] } } };
+    const result = validateRoutingRegistered(routing, registry);
+    expect(result.ok).toBe(false);
+    expect(result.unregistered).toEqual(['openai']);     // provider/model ref mapped to provider id
+  });
+
+  it('boot_time_routing_validation_runs_over_overrides_too', () => {
+    const registry = new ProviderRegistry();
+    registry.register(fixtureProvider('codex'));
+    // primary registered, but a task_override points at an unregistered provider
+    const routing: RoutingConfig = {
+      agents: { developer: { primary: 'codex', fallbacks: [] } },
+      task_overrides: { patch: { developer: 'deepseek' } },
+    };
+    const result = validateRoutingRegistered(routing, registry);
+    expect(result.ok).toBe(false);
+    expect(result.unregistered).toContain('deepseek');   // scan reaches task_overrides
+    expect(collectRoutedProviderIds(routing).sort()).toEqual(['codex', 'deepseek']);
+  });
+
+  it('clear_escalation_not_silent_crash', () => {
+    const registry = new ProviderRegistry();
+    const routing: RoutingConfig = { agents: { developer: { primary: 'openai', fallbacks: [] } } };
+    let result!: ReturnType<typeof validateRoutingRegistered>;
+    expect(() => { result = validateRoutingRegistered(routing, registry); }).not.toThrow();
+    expect(result.escalation).toBeTruthy();
+    expect(result.escalation).toMatch(/openai/);
+    expect(result.escalation).toMatch(/unregistered|fail closed/i);
+  });
+
+  it('fixture_routing_unaffected', () => {
+    const registry = new ProviderRegistry();
+    registry.register(fixtureProvider('fixture-dev'));
+    registry.register(fixtureProvider('scripted'));
+    const routing: RoutingConfig = {
+      agents: {
+        developer: { primary: 'fixture-dev', fallbacks: ['scripted'] },
+        supervisor: { primary: 'scripted', fallbacks: [] },
+      },
+    };
+    const result = validateRoutingRegistered(routing, registry);
+    expect(result.ok).toBe(true);
+    expect(result.escalation).toBeNull();
   });
 });
 
