@@ -10,7 +10,8 @@ import {
   buildModeAwarePacket, assertDocWriteSafe,
   buildReviewerContextPacket, assertReviewerContextClean, REVIEWER_DENIED_SECTIONS,
   injectOwnPreviousStorySummary,
-  ArtifactRef, PhaseSignals, LifecyclePhase, ContextWindow, Turn,
+  buildPinnedZone, AUTO_PINNED_NAMES,
+  ArtifactRef, PhaseSignals, LifecyclePhase, ContextWindow, Turn, PinnedSection,
 } from './index';
 import type { FullSkillManifest } from '@codeharness/skill-runtime';
 
@@ -588,5 +589,47 @@ describe('own-story-summary', () => {
     const prev = { story_id: 'STORY-PREV', window: makeWindowLocal([makeTurnLocal('x')]) };
     const updated = injectOwnPreviousStorySummary(packet as unknown as Parameters<typeof injectOwnPreviousStorySummary>[0], { role: 'supervisor' as unknown as 'developer', previousStory: prev });
     expect(updated).toBe(packet);
+  });
+});
+
+// ── STORY-027.4: never-compress zone ─────────────────────────────────────────
+
+describe('never-compress-zone', () => {
+  const pinned: PinnedSection[] = [
+    { name: 'arch_decisions', text: 'DECISION D1: use vitest', pin_reason: 'arch_decision' },
+    { name: 'global_gate_statuses', text: 'real_api_calls: false', pin_reason: 'global_gate_status' },
+  ];
+
+  it('pinned_zone_survives_compaction', () => {
+    const turns = Array.from({ length: 10 }, (_, i) => ({
+      role: 'assistant' as const, content: 'X'.repeat(5000), tokenCount: 1250, pinned: false
+    }));
+    const window = { turns, totalTokens: 12500 };
+    const result = compactContextWindow(window, undefined, pinned);
+    // Pinned sections must still be accessible via ArtifactRef
+    const zone = buildPinnedZone(pinned);
+    expect(zone.length).toBe(2);
+    expect(zone.every(r => r.priority === 0)).toBe(true);
+    // Synthetic pinned turns survive in result
+    expect(result.turns.some(t => t.pinned && t.content === 'DECISION D1: use vitest')).toBe(true);
+    expect(result.turns.some(t => t.pinned && t.content === 'real_api_calls: false')).toBe(true);
+  });
+
+  it('arch_decisions_and_invariants_auto_pinned', () => {
+    expect(AUTO_PINNED_NAMES).toContain('arch_decisions');
+    expect(AUTO_PINNED_NAMES).toContain('story_invariants');
+    expect(AUTO_PINNED_NAMES).toContain('global_gate_statuses');
+  });
+
+  it('planning_steward_can_pin_sections', () => {
+    const customPin: PinnedSection = { name: 'custom', text: 'important', pin_reason: 'planning_steward' };
+    const zone = buildPinnedZone([customPin]);
+    expect(zone[0].priority).toBe(0);
+    expect(zone[0].name).toBe('custom');
+  });
+
+  it('compaction_exclusion_priority_zero', () => {
+    const zone = buildPinnedZone(pinned);
+    zone.forEach(r => expect(r.priority).toBe(0));
   });
 });

@@ -290,14 +290,54 @@ function reorder(
   return [...pinned, ...compressed];
 }
 
-/** Orchestrate the full compaction pipeline: Level-1 then Level-2 if still needed. */
+// ── STORY-027.4: Never-compress zone ─────────────────────────────────────────
+
+export interface PinnedSection {
+  name: string;
+  text: string;
+  pin_reason: 'arch_decision' | 'story_invariant' | 'planning_steward' | 'global_gate_status';
+}
+
+export const AUTO_PINNED_NAMES = [
+  'arch_decisions',
+  'story_invariants',
+  'global_gate_statuses',
+] as const;
+
+/** Convert PinnedSection[] to ArtifactRef[] with priority: 0 (never evicted). */
+export function buildPinnedZone(sections: PinnedSection[]): ArtifactRef[] {
+  return sections.map(s => ({
+    name: s.name,
+    ref: `pinned_zone:${s.name}`,
+    text: s.text,
+    tokenCount: Math.ceil(s.text.length / 4),
+    priority: 0,
+  }));
+}
+
+/** Orchestrate the full compaction pipeline: Level-1 then Level-2 if still needed.
+ *  pinnedSections are injected as pinned turns before compaction so their content survives. */
 export function compactContextWindow(
   window: ContextWindow,
   cfg: ContextManagerConfig = DEFAULT_CONFIG,
+  pinnedSections?: PinnedSection[],
 ): ContextWindow {
-  let w = compressLargeNodes(window, cfg);
-  if (w.totalTokens > cfg.level2ChainTokenThreshold) w = compressChain(w, cfg);
-  return applySlidingWindow(w, cfg);
+  let w = window;
+  if (pinnedSections && pinnedSections.length > 0) {
+    const syntheticPinned: Turn[] = pinnedSections.map(s => ({
+      role: 'system',
+      content: s.text,
+      tokenCount: Math.ceil(s.text.length / 4),
+      pinned: true,
+    }));
+    w = {
+      turns: [...syntheticPinned, ...window.turns],
+      totalTokens: syntheticPinned.reduce((sum, t) => sum + t.tokenCount, 0) + window.totalTokens,
+    };
+  }
+  let result = compressLargeNodes(w, cfg);
+  if (result.totalTokens > cfg.level2ChainTokenThreshold) result = compressChain(result, cfg);
+  return applySlidingWindow(result, cfg);
 }
 
 // ── STORY-015.4: project conventions memory (per-target profile) ──────────────
