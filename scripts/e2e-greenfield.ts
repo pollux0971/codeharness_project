@@ -21,7 +21,10 @@ import {
   loadOrInitProjectRunState, buildReviewSummary, recordReviewDecision,
   type StoryRecord, type CheckpointRecord,
 } from '@codeharness/harness-core';
-import { runSequentialScheduler } from '@codeharness/task-graph';
+// task-graph is the one multi-file package; its NodeNext './scheduler.js'
+// specifiers aren't resolved by `node --experimental-strip-types`, so import the
+// compiled dist (whose .js siblings exist). Other packages are single-file src.
+import { runSequentialScheduler } from '../packages/task-graph/dist/index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixtureRoot = path.join(here, '../tests/fixtures/e2e-cli-tool');

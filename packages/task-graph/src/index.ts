@@ -48,7 +48,14 @@ export function validateFilesWithinScope(files: string[], scope: ContractScope):
 export class TaskGraph {
   private tasks: Task[] = [];
   private seq = 0;
-  constructor(public parentStoryId: string, public parentContractId: string, private scope: ContractScope) {}
+  public parentStoryId: string;
+  public parentContractId: string;
+  private scope: ContractScope;
+  constructor(parentStoryId: string, parentContractId: string, scope: ContractScope) {
+    this.parentStoryId = parentStoryId;
+    this.parentContractId = parentContractId;
+    this.scope = scope;
+  }
 
   /** TaskCreate — append a subtask; rejects files outside the parent write-set. */
   create(input: TaskCreateInput): Task {

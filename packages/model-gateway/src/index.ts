@@ -569,15 +569,20 @@ export class BudgetGuard {
   private tokens = 0;
   private killed = false;
   private killReason = '';
+  private storyId: string;
+  private config: BudgetConfig;
 
   constructor(
-    private storyId: string,
-    private config: BudgetConfig = {
+    storyId: string,
+    config: BudgetConfig = {
       maxCallsPerStory: 30,
       maxTokensPerStory: 400_000,
       onExceed: 'escalate',
     }
-  ) {}
+  ) {
+    this.storyId = storyId;
+    this.config = config;
+  }
 
   check(): BudgetVerdict {
     if (this.killed) {
@@ -622,8 +627,11 @@ export interface RunBudgetPoolConfig {
 export class RunBudgetPool {
   private workers: Map<string, BudgetGuard> = new Map();
   private _killed = false;
+  private config: RunBudgetPoolConfig;
 
-  constructor(private config: RunBudgetPoolConfig) {}
+  constructor(config: RunBudgetPoolConfig) {
+    this.config = config;
+  }
 
   registerWorker(workerId: string): BudgetGuard {
     if (this.workers.has(workerId)) {

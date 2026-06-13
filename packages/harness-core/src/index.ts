@@ -9,6 +9,8 @@
 //
 // Nothing here is an LLM. Every decision is deterministic and auditable.
 
+import { readFileSync, existsSync } from 'node:fs';
+
 // ── Types ────────────────────────────────────────────────────────────────────
 
 /** UI-facing trace event type for the TraceViewer component. */
@@ -334,7 +336,6 @@ export function loadOrInitProjectRunState(
   storyIds: string[],
   runIterationBudget: number
 ): ProjectRunState {
-  const { readFileSync, existsSync } = require('fs') as typeof import('fs');
   if (existsSync(filePath)) {
     const parsed = JSON.parse(readFileSync(filePath, 'utf8')) as ProjectRunState;
     if (parsed.schema_version !== 1) {

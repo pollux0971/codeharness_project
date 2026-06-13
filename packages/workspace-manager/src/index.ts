@@ -355,7 +355,10 @@ export interface IsolatedRun {
 }
 
 export class WorkspaceIsolationPool {
-  constructor(private registry: WorkspaceRegistry) {}
+  private registry: WorkspaceRegistry;
+  constructor(registry: WorkspaceRegistry) {
+    this.registry = registry;
+  }
 
   /** Spawn one isolated workspace per story_id and run the inner loop concurrently.
    *  Cleans up only on throw; caller is responsible for cleanup on normal return. */
