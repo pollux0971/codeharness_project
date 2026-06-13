@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CodeHarnessMetrics",
+  "description": "Six canonical metrics derived from the trace. No separate metrics store in v1.",
+  "type": "object",
+  "required": ["window_start", "window_end", "metrics"],
+  "additionalProperties": false,
+  "properties": {
+    "window_start": { "type": "string", "format": "date-time" },
+    "window_end":   { "type": "string", "format": "date-time" },
+    "run_id":       { "type": ["string", "null"] },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["story_success_rate", "debug_cycle_efficiency", "retry_rate",
+                   "token_consumption", "human_gate_frequency", "failure_gene_recurrence"],
+      "properties": {
+
+        "story_success_rate": {
+          "type": "object",
+          "description": "pass/total per time window",
+          "required": ["passed", "total", "rate"],
+          "properties": {
+            "passed": { "type": "integer", "minimum": 0 },
+            "total":  { "type": "integer", "minimum": 0 },
+            "rate":   { "type": "number",  "minimum": 0, "maximum": 1 }
+          }
+        },
+
+        "debug_cycle_efficiency": {
+          "type": "object",
+          "description": "Validator failures before first pass",
+          "required": ["mean_failures_before_pass", "sample_size"],
+          "properties": {
+            "mean_failures_before_pass": { "type": "number", "minimum": 0 },
+            "sample_size":              { "type": "integer", "minimum": 0 }
+          }
+        },
+
+        "retry_rate": {
+          "type": "object",
+          "description": "Stories that needed attempt 2+",
+          "required": ["retried", "total", "rate"],
+          "properties": {
+            "retried": { "type": "integer", "minimum": 0 },
+            "total":   { "type": "integer", "minimum": 0 },
+            "rate":    { "type": "number",  "minimum": 0, "maximum": 1 }
+          }
+        },
+
+        "token_consumption": {
+          "type": "object",
+          "description": "Per story / per agent / per run",
+          "required": ["total_tokens"],
+          "properties": {
+            "total_tokens":       { "type": "integer", "minimum": 0 },
+            "per_story_mean":     { "type": ["number", "null"] },
+            "per_agent_breakdown": {
+              "type": "object",
+              "additionalProperties": { "type": "integer" }
+            }
+          }
+        },
+
+        "human_gate_frequency": {
+          "type": "object",
+          "description": "Gates per run, mean wait time, resolution breakdown",
+          "required": ["gates_per_run", "mean_wait_seconds"],
+          "properties": {
+            "gates_per_run":       { "type": "number", "minimum": 0 },
+            "mean_wait_seconds":   { "type": "number", "minimum": 0 },
+            "auto_resolved":       { "type": "integer", "minimum": 0 },
+            "human_resolved":      { "type": "integer", "minimum": 0 }
+          }
+        },
+
+        "failure_gene_recurrence": {
+          "type": "object",
+          "description": "Recurring gene count and most frequent signals",
+          "required": ["recurring_gene_count"],
+          "properties": {
+            "recurring_gene_count": { "type": "integer", "minimum": 0 },
+            "top_signals": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "signal":      { "type": "string" },
+                  "occurrences": { "type": "integer" }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
