@@ -11,6 +11,7 @@ import {
   importBrownfieldRepo, validateBrownfieldIntake,
   emitAmbiguityQuestions,
   processScopeChange,
+  askFrontendStageQuestion,
   type DefectReport, type TestRunner, type TaskClass, type BacklogDelta,
 } from './index';
 
@@ -837,5 +838,43 @@ describe('scope-change', () => {
     const delta = await processScopeChange('add a metrics dashboard', {});
     expect(delta.new_stories.length).toBeGreaterThan(0);
     expect(typeof delta.new_stories[0].story_id).toBe('string');
+  });
+});
+
+// ── STORY-026.1: Frontend showcase stage flag ────────────────────────────────
+
+describe('frontend-stage', () => {
+  const idea = { title: 'Build REST API', description: 'A Node.js API with web UI' };
+
+  it('steward_asks_frontend_stage_question', () => {
+    const answer = askFrontendStageQuestion(idea, 'yes');
+    expect(answer.decision).toBe('yes');
+    expect(answer.has_frontend_stage).toBe(true);
+  });
+
+  it('bundle_carries_has_frontend_stage', () => {
+    const answer = askFrontendStageQuestion(idea, 'yes');
+    expect(answer.has_frontend_stage).toBe(true);
+    expect(answer.showcase_story).not.toBeNull();
+    expect(answer.showcase_story?.story_id).toMatch(/STORY-SHOWCASE/);
+  });
+
+  it('declining_recorded_for_preview_state', () => {
+    const answer = askFrontendStageQuestion(idea, 'no');
+    expect(answer.has_frontend_stage).toBe(false);
+    expect(answer.decline_recorded).toBe(true);
+    expect(answer.showcase_story).toBeFalsy();
+  });
+
+  it('showcase_story_emitted_when_chosen', () => {
+    const answer = askFrontendStageQuestion(idea, 'yes');
+    expect(answer.showcase_story?.task_class).toBe('greenfield');
+    expect(answer.showcase_story?.allowed_write_set).toContain('dist/**');
+  });
+
+  it('not_applicable_sets_null', () => {
+    const answer = askFrontendStageQuestion(idea, 'not_applicable');
+    expect(answer.has_frontend_stage).toBeNull();
+    expect(answer.decline_recorded).toBe(false);
   });
 });

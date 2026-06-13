@@ -736,6 +736,34 @@ export async function processScopeChange(messageText, opts) {
         validation_errors: [],
     };
 }
+// ── STORY-026.1: Frontend showcase stage flag ────────────────────────────────
+const WEB_SURFACE_RE = /\b(web|ui|frontend|browser)\b/i;
+let _showcaseCounter = 0;
+function nextShowcaseId() {
+    _showcaseCounter += 1;
+    return `STORY-SHOWCASE-${String(_showcaseCounter).padStart(4, '0')}`;
+}
+export function askFrontendStageQuestion(idea, decision) {
+    const isBrownfield = idea.mode === 'brownfield';
+    const hasWebSurface = WEB_SURFACE_RE.test(idea.description);
+    if (isBrownfield && !hasWebSurface) {
+        return { decision, has_frontend_stage: null, decline_recorded: false };
+    }
+    if (decision === 'yes') {
+        const showcaseStory = {
+            story_id: nextShowcaseId(),
+            depends_on: [],
+            allowed_write_set: ['dist/**'],
+            parallelism_class: 'sequential',
+            task_class: 'greenfield',
+        };
+        return { decision, has_frontend_stage: true, showcase_story: showcaseStory, decline_recorded: false };
+    }
+    if (decision === 'no') {
+        return { decision, has_frontend_stage: false, showcase_story: null, decline_recorded: true };
+    }
+    return { decision, has_frontend_stage: null, decline_recorded: false };
+}
 const REQUIRED_INTAKE_FIELDS = [
     'intake_id', 'repo_path', 'intake_at', 'entry_points',
     'layers', 'dependency_map', 'conventions', 'recovery_docs_path',
