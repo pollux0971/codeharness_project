@@ -1,65 +1,31 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "CodeHarness Settings",
-  "description": "User-tunable runtime parameters. May relax cost/quality but never weaken a trust boundary; keys that would open a global gate are deliberately not representable.",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CodeHarnessSettings",
+  "description": "User-tunable settings (VSCode-style). Global gates are NOT representable here.",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "version",
-    "target",
-    "budget",
-    "quality_bar",
-    "model",
-    "parallelism",
-    "brownfield",
-    "delivery",
-    "failure_bank"
-  ],
   "properties": {
-    "version": {
-      "const": 1
-    },
     "target": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "project_type": {
-          "enum": [
-            "cli_tool",
-            "web_app",
-            "rest_api",
-            "library"
-          ]
-        },
-        "stack": {
-          "enum": [
-            "node_ts"
-          ]
-        }
+        "project_type": { "enum": ["greenfield", "brownfield", "patch"] },
+        "stack":        { "enum": ["node-ts", "python", "go", "rust", "unknown"] }
       }
     },
-    "budget": {
+    "model": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "per_story_token_cap": {
-          "type": "integer",
-          "minimum": 1000
-        },
-        "per_run_token_cap": {
-          "type": "integer",
-          "minimum": 1000
-        },
-        "per_story_call_cap": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "on_exceed": {
-          "enum": [
-            "escalate_human",
-            "block_only"
-          ]
-        }
+        "real_provider_scope": { "enum": ["none", "hybrid", "all"] }
+      }
+    },
+    "parallelism": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_parallel_stories":     { "type": "integer", "minimum": 1, "maximum": 8 },
+        "enable_competitive_debug": { "type": "boolean" }
       }
     },
     "quality_bar": {
@@ -68,126 +34,40 @@
       "properties": {
         "greenfield": {
           "type": "array",
-          "items": {
-            "enum": [
-              "install",
-              "build",
-              "test",
-              "typecheck",
-              "lint",
-              "coverage"
-            ]
-          },
-          "minItems": 1
+          "items": { "enum": ["build", "test", "typecheck", "coverage"] }
         },
-        "brownfield_strictness": {
-          "enum": [
-            "no_new_failures",
-            "no_coverage_drop",
-            "with_perf_budget"
-          ]
-        }
+        "brownfield_strictness": { "enum": ["zero_new_failures", "full_bar"] }
       }
     },
-    "model": {
+    "budget": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "real_provider_scope": {
-          "enum": [
-            "hybrid",
-            "all",
-            "none"
-          ]
-        },
-        "escalation_ladder": {
-          "type": "boolean"
-        },
-        "cheap_tier_for_trivial": {
-          "type": "boolean"
-        }
-      }
-    },
-    "parallelism": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "enabled": {
-          "type": "boolean"
-        },
-        "max_workers": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 16
-        },
-        "competitive_debug": {
-          "type": "boolean"
-        }
-      }
-    },
-    "brownfield": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "recovery_depth": {
-          "enum": [
-            "profile_plus_architecture",
-            "full_module_docs"
-          ]
-        }
+        "max_calls_per_story":  { "type": "integer", "minimum": 1,    "maximum": 200     },
+        "max_tokens_per_story": { "type": "integer", "minimum": 1000, "maximum": 2000000 },
+        "max_calls_per_run":    { "type": "integer", "minimum": 1,    "maximum": 5000    }
       }
     },
     "delivery": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "promotion_target": {
-          "enum": [
-            "local_stable_dir",
-            "git_push_remote",
-            "both"
-          ]
-        },
-        "human_gate_interface": {
-          "enum": [
-            "cli",
-            "cockpit"
-          ]
-        }
-      }
-    },
-    "notifications": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "channel": {
-          "enum": [
-            "none",
-            "webhook",
-            "email"
-          ]
-        },
-        "notify_on": {
-          "type": "array",
-          "items": {
-            "enum": [
-              "escalation",
-              "approval_request"
-            ]
-          }
-        }
+        "promotion_target":     { "enum": ["local_stable", "git_remote", "artifact_registry"] },
+        "human_gate_interface": { "enum": ["cli", "web", "none"] }
       }
     },
     "failure_bank": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "scope": {
-          "enum": [
-            "global",
-            "per_project"
-          ]
-        }
+        "scope": { "enum": ["project", "global"] }
+      }
+    },
+    "brownfield": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "recovery_depth": { "enum": ["shallow", "full"] }
       }
     }
   }
