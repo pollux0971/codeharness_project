@@ -15,6 +15,7 @@
     "dist"
   ],
   "references": [
-    { "path": "../event-log" }
+    { "path": "../event-log" },
+    { "path": "../settings" }
   ]
 }

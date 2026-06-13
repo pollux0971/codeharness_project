@@ -27,6 +27,7 @@ import {
   recordTestIntegrity,
   sendNotification,
   enrichBrownfieldStory,
+  recordResolvedSettings,
   type HarnessState,
   type StoryRecord,
   type RunBudget,
@@ -38,6 +39,7 @@ import {
   type BrownfieldCodeGraphClient,
 } from './index.js';
 import { readJsonl } from '@codeharness/event-log';
+import { DEFAULT_SETTINGS } from '@codeharness/settings';
 
 const tmpPath = () => join(tmpdir(), `prs_test_${Date.now()}_${Math.floor(Math.random() * 1e6)}.json`);
 
@@ -733,5 +735,16 @@ describe('brownfield-enrichment', () => {
     const gf = { ...brownfieldRecord(), task_class: 'greenfield' as const };
     const enriched = await enrichBrownfieldStory(gf);
     expect(enriched).toBe(gf);
+  });
+});
+
+describe('settings-trace', () => {
+  it('resolved_settings_recorded_in_trace', async () => {
+    const trace = join(tmpdir(), `settings-trace-${process.pid}.jsonl`);
+    await recordResolvedSettings(DEFAULT_SETTINGS, trace);
+    const events = readJsonl(trace);
+    expect(events.length).toBe(1);
+    expect(events[0].type).toBe('resolved_settings');
+    if (existsSync(trace)) unlinkSync(trace);
   });
 });

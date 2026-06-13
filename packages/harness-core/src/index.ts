@@ -582,6 +582,24 @@ const defaultHttpClient: NotificationHttpClient = async (url, payload) => {
 
 const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 
+// ── STORY-021.2: Resolved settings trace recording ───────────────────────────
+
+export async function recordResolvedSettings(
+  settings: import('@codeharness/settings').HarnessSettings,
+  traceLogPath: string
+): Promise<void> {
+  const existing = readJsonl(traceLogPath);
+  const last = existing[existing.length - 1];
+  const event = createTraceEvent({
+    run_id: 'settings-boot',
+    seq: last ? last.seq + 1 : 0,
+    previous_event_hash: last ? (last.hash ?? null) : null,
+    type: 'resolved_settings',
+    payload: settings as Record<string, unknown>,
+  });
+  appendJsonl(traceLogPath, event);
+}
+
 export async function sendNotification(
   payload: NotificationPayload,
   config: NotificationConfig,

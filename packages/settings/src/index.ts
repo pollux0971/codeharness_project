@@ -99,6 +99,90 @@ export function isGlobalGateKey(key: string): boolean {
   return GLOBAL_GATE_KEYS.has(key);
 }
 
+// ── Precedence resolution ─────────────────────────────────────────────────────
+
+export type SettingsOverride = Partial<HarnessSettings>;
+
+const TOP_LEVEL_SECTIONS = [
+  'target', 'model', 'parallelism', 'quality_bar',
+  'budget', 'delivery', 'failure_bank', 'brownfield',
+] as const;
+
+type SectionKey = typeof TOP_LEVEL_SECTIONS[number];
+
+/**
+ * Resolves effective settings with three-layer precedence:
+ * storyOverride > workspaceSettings > defaults
+ * All inputs are pre-loaded (no file I/O here).
+ * Throws if the resolved result fails validation.
+ */
+export function resolveSettings(
+  defaults: HarnessSettings,
+  workspaceSettings?: SettingsOverride,
+  storyOverride?: SettingsOverride
+): HarnessSettings {
+  const resolved: HarnessSettings = { ...defaults };
+
+  for (const section of TOP_LEVEL_SECTIONS) {
+    const key = section as SectionKey;
+    const ws = workspaceSettings?.[key];
+    const so = storyOverride?.[key];
+    if (ws !== undefined || so !== undefined) {
+      resolved[key] = {
+        ...(defaults[key] as object ?? {}),
+        ...(ws as object ?? {}),
+        ...(so as object ?? {}),
+      } as HarnessSettings[typeof key];
+    }
+  }
+
+  const result = validateSettings(resolved);
+  if (!result.ok) {
+    throw new Error(`settings_resolution_failed: ${result.errors.join('; ')}`);
+  }
+
+  return resolved;
+}
+
+// ── YAML loading ──────────────────────────────────────────────────────────────
+
+import { parse as parseYaml } from 'yaml';
+
+/**
+ * Parse YAML text, validate against schema, and return typed settings.
+ * Returns null if text is empty. Throws if the YAML is invalid.
+ * Callers handle file I/O; this function only parses and validates.
+ */
+export function loadWorkspaceSettings(yamlText: string): HarnessSettings | null {
+  const trimmed = yamlText.trim();
+  if (!trimmed) return null;
+
+  const parsed = parseYaml(trimmed) as unknown;
+  if (parsed === null || parsed === undefined) return null;
+
+  const result = validateSettings(parsed);
+  if (!result.ok) {
+    throw new Error(`invalid workspace settings: ${result.errors.join('; ')}`);
+  }
+
+  return parsed as HarnessSettings;
+}
+
+// ── .gitignore helper ─────────────────────────────────────────────────────────
+
+/**
+ * Returns lines to add to .gitignore to ensure workspace settings.yaml is ignored.
+ * Pure function — callers handle writing the file.
+ */
+export function ensureGitignored(existingGitignore: string): string {
+  if (/(?:^|\n)settings\.yaml(?:\r?\n|$)/.test(existingGitignore)) {
+    return existingGitignore;
+  }
+  return existingGitignore.endsWith('\n')
+    ? existingGitignore + 'settings.yaml\n'
+    : existingGitignore + '\nsettings.yaml\n';
+}
+
 export function validateSettings(settings: unknown): ValidationResult {
   const errors: string[] = [];
 

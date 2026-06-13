@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateSettings, DEFAULT_SETTINGS, isGlobalGateKey } from './index';
+import { validateSettings, DEFAULT_SETTINGS, isGlobalGateKey, resolveSettings, loadWorkspaceSettings, ensureGitignored } from './index';
 
 describe('settings-boot', () => {
   it('default_settings_validate_against_schema', () => {
@@ -31,5 +31,42 @@ describe('settings-boot', () => {
     expect(isGlobalGateKey('real_api_calls')).toBe(true);
     expect(isGlobalGateKey('stable_promotion')).toBe(true);
     expect(isGlobalGateKey('budget')).toBe(false);
+  });
+});
+
+describe('settings-resolution', () => {
+  it('story_override_beats_workspace_settings', () => {
+    const resolved = resolveSettings(
+      DEFAULT_SETTINGS,
+      { budget: { max_calls_per_story: 50 } },
+      { budget: { max_calls_per_story: 5 } }
+    );
+    expect(resolved.budget!.max_calls_per_story).toBe(5);
+  });
+
+  it('workspace_settings_beat_defaults', () => {
+    const resolved = resolveSettings(DEFAULT_SETTINGS, { parallelism: { max_parallel_stories: 4 } });
+    expect(resolved.parallelism!.max_parallel_stories).toBe(4);
+  });
+
+  it('defaults_used_when_no_overrides', () => {
+    const resolved = resolveSettings(DEFAULT_SETTINGS);
+    expect(resolved.budget!.max_calls_per_story).toBe(30);
+    expect(resolved.parallelism!.max_parallel_stories).toBe(2);
+  });
+
+  it('invalid_workspace_settings_throws', () => {
+    expect(() => loadWorkspaceSettings('budget:\n  max_calls_per_story: 0\n')).toThrow();
+  });
+
+  it('workspace_settings_file_gitignored', () => {
+    const result = ensureGitignored('node_modules\n.env\n');
+    expect(result).toContain('settings.yaml');
+  });
+
+  it('gitignore_not_duplicated', () => {
+    const result = ensureGitignored('settings.yaml\n.env\n');
+    const count = (result.match(/settings\.yaml/g) || []).length;
+    expect(count).toBe(1);
   });
 });
