@@ -34,6 +34,22 @@ describe('settings-boot', () => {
   });
 });
 
+describe('review-settings', () => {
+  it('review_settings_in_schema', () => {
+    expect(validateSettings({ review: { trigger: 'off', cross_model: false, max_directions: 2 } }).ok).toBe(true);
+  });
+
+  it('review_trigger_invalid_fails', () => {
+    expect(validateSettings({ review: { trigger: 'sometimes' } } as any).ok).toBe(false);
+  });
+
+  it('settings_cannot_open_global_gate', () => {
+    const r = validateSettings({ review: { real_api_calls: true } } as any);
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(' ')).toMatch(/unknown|additional/i);
+  });
+});
+
 describe('settings-resolution', () => {
   it('story_override_beats_workspace_settings', () => {
     const resolved = resolveSettings(

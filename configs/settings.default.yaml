@@ -30,3 +30,8 @@ failure_bank:
 
 brownfield:
   recovery_depth: shallow
+
+review:
+  trigger: on_second_failure
+  cross_model: false
+  max_directions: 2

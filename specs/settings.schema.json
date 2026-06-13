@@ -69,6 +69,15 @@
       "properties": {
         "recovery_depth": { "enum": ["shallow", "full"] }
       }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "trigger":         { "enum": ["on_second_failure", "on_every_failure", "off"] },
+        "cross_model":     { "type": "boolean" },
+        "max_directions":  { "type": "integer", "minimum": 1, "maximum": 5 }
+      }
     }
   }
 }

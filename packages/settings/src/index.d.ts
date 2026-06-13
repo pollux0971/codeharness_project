@@ -28,6 +28,11 @@ export interface FailureBankSettings {
 export interface BrownfieldSettings {
     recovery_depth?: 'shallow' | 'full';
 }
+export interface ReviewSettings {
+    trigger?: 'on_second_failure' | 'on_every_failure' | 'off';
+    cross_model?: boolean;
+    max_directions?: number;
+}
 export interface HarnessSettings {
     target?: TargetSettings;
     model?: ModelSettings;
@@ -37,6 +42,7 @@ export interface HarnessSettings {
     delivery?: DeliverySettings;
     failure_bank?: FailureBankSettings;
     brownfield?: BrownfieldSettings;
+    review?: ReviewSettings;
 }
 export interface ValidationResult {
     ok: boolean;

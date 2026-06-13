@@ -24,6 +24,11 @@ export interface DeliverySettings {
 }
 export interface FailureBankSettings { scope?: 'project' | 'global'; }
 export interface BrownfieldSettings  { recovery_depth?: 'shallow' | 'full'; }
+export interface ReviewSettings {
+  trigger?:        'on_second_failure' | 'on_every_failure' | 'off';
+  cross_model?:    boolean;
+  max_directions?: number;
+}
 
 export interface HarnessSettings {
   target?:       TargetSettings;
@@ -34,6 +39,7 @@ export interface HarnessSettings {
   delivery?:     DeliverySettings;
   failure_bank?: FailureBankSettings;
   brownfield?:   BrownfieldSettings;
+  review?:       ReviewSettings;
 }
 
 export interface ValidationResult {
@@ -50,6 +56,7 @@ export const DEFAULT_SETTINGS: HarnessSettings = {
   delivery:     { promotion_target: 'local_stable', human_gate_interface: 'cli' },
   failure_bank: { scope: 'project' },
   brownfield:   { recovery_depth: 'shallow' },
+  review:       { trigger: 'on_second_failure', cross_model: false, max_directions: 2 },
 };
 
 const GLOBAL_GATE_KEYS = new Set([
@@ -61,7 +68,7 @@ const GLOBAL_GATE_KEYS = new Set([
 
 const ALLOWED_TOP_LEVEL = new Set([
   'target', 'model', 'parallelism', 'quality_bar',
-  'budget', 'delivery', 'failure_bank', 'brownfield',
+  'budget', 'delivery', 'failure_bank', 'brownfield', 'review',
 ]);
 
 const ALLOWED_NESTED: Record<string, Set<string>> = {
@@ -73,6 +80,7 @@ const ALLOWED_NESTED: Record<string, Set<string>> = {
   delivery:     new Set(['promotion_target', 'human_gate_interface']),
   failure_bank: new Set(['scope']),
   brownfield:   new Set(['recovery_depth']),
+  review:       new Set(['trigger', 'cross_model', 'max_directions']),
 };
 
 type EnumMap = Record<string, readonly string[]>;
@@ -84,6 +92,7 @@ const ENUM_VALUES: Record<string, EnumMap> = {
   delivery:     { promotion_target: ['local_stable', 'git_remote', 'artifact_registry'], human_gate_interface: ['cli', 'web', 'none'] },
   failure_bank: { scope: ['project', 'global'] },
   brownfield:   { recovery_depth: ['shallow', 'full'] },
+  review:       { trigger: ['on_second_failure', 'on_every_failure', 'off'] },
 };
 
 const INT_RANGES: Record<string, Record<string, [number, number]>> = {
@@ -93,6 +102,7 @@ const INT_RANGES: Record<string, Record<string, [number, number]>> = {
     max_tokens_per_story: [1000, 2_000_000],
     max_calls_per_run:    [1, 5000],
   },
+  review: { max_directions: [1, 5] },
 };
 
 export function isGlobalGateKey(key: string): boolean {
@@ -105,7 +115,7 @@ export type SettingsOverride = Partial<HarnessSettings>;
 
 const TOP_LEVEL_SECTIONS = [
   'target', 'model', 'parallelism', 'quality_bar',
-  'budget', 'delivery', 'failure_bank', 'brownfield',
+  'budget', 'delivery', 'failure_bank', 'brownfield', 'review',
 ] as const;
 
 type SectionKey = typeof TOP_LEVEL_SECTIONS[number];
@@ -237,7 +247,7 @@ export function validateSettings(settings: unknown): ValidationResult {
         continue;
       }
 
-      if (key === 'enable_competitive_debug') {
+      if (key === 'enable_competitive_debug' || key === 'cross_model') {
         if (typeof val !== 'boolean') {
           errors.push(`"${section}.${key}" must be a boolean, got: ${JSON.stringify(val)}`);
         }

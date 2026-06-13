@@ -7,6 +7,7 @@ export const DEFAULT_SETTINGS = {
     delivery: { promotion_target: 'local_stable', human_gate_interface: 'cli' },
     failure_bank: { scope: 'project' },
     brownfield: { recovery_depth: 'shallow' },
+    review: { trigger: 'on_second_failure', cross_model: false, max_directions: 2 },
 };
 const GLOBAL_GATE_KEYS = new Set([
     'real_api_calls',
@@ -16,7 +17,7 @@ const GLOBAL_GATE_KEYS = new Set([
 ]);
 const ALLOWED_TOP_LEVEL = new Set([
     'target', 'model', 'parallelism', 'quality_bar',
-    'budget', 'delivery', 'failure_bank', 'brownfield',
+    'budget', 'delivery', 'failure_bank', 'brownfield', 'review',
 ]);
 const ALLOWED_NESTED = {
     target: new Set(['project_type', 'stack']),
@@ -27,6 +28,7 @@ const ALLOWED_NESTED = {
     delivery: new Set(['promotion_target', 'human_gate_interface']),
     failure_bank: new Set(['scope']),
     brownfield: new Set(['recovery_depth']),
+    review: new Set(['trigger', 'cross_model', 'max_directions']),
 };
 const ENUM_VALUES = {
     target: { project_type: ['greenfield', 'brownfield', 'patch'], stack: ['node-ts', 'python', 'go', 'rust', 'unknown'] },
@@ -35,6 +37,7 @@ const ENUM_VALUES = {
     delivery: { promotion_target: ['local_stable', 'git_remote', 'artifact_registry'], human_gate_interface: ['cli', 'web', 'none'] },
     failure_bank: { scope: ['project', 'global'] },
     brownfield: { recovery_depth: ['shallow', 'full'] },
+    review: { trigger: ['on_second_failure', 'on_every_failure', 'off'] },
 };
 const INT_RANGES = {
     parallelism: { max_parallel_stories: [1, 8] },
@@ -43,13 +46,14 @@ const INT_RANGES = {
         max_tokens_per_story: [1000, 2_000_000],
         max_calls_per_run: [1, 5000],
     },
+    review: { max_directions: [1, 5] },
 };
 export function isGlobalGateKey(key) {
     return GLOBAL_GATE_KEYS.has(key);
 }
 const TOP_LEVEL_SECTIONS = [
     'target', 'model', 'parallelism', 'quality_bar',
-    'budget', 'delivery', 'failure_bank', 'brownfield',
+    'budget', 'delivery', 'failure_bank', 'brownfield', 'review',
 ];
 /**
  * Resolves effective settings with three-layer precedence:
@@ -156,7 +160,7 @@ export function validateSettings(settings) {
                 }
                 continue;
             }
-            if (key === 'enable_competitive_debug') {
+            if (key === 'enable_competitive_debug' || key === 'cross_model') {
                 if (typeof val !== 'boolean') {
                     errors.push(`"${section}.${key}" must be a boolean, got: ${JSON.stringify(val)}`);
                 }
