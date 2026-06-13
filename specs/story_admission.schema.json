@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "StoryAdmissionEvent",
+  "type": "object",
+  "required": ["story_id", "admitted", "denied_reason", "gates_checked", "checked_at"],
+  "properties": {
+    "story_id":      { "type": "string" },
+    "admitted":      { "type": "boolean" },
+    "denied_reason": { "type": ["string", "null"] },
+    "gates_checked": {
+      "type": "array",
+      "items": { "enum": ["deps_done","human_hold","wave_open","wip_limit","write_set_overlap","budget"] }
+    },
+    "checked_at":    { "type": "string", "format": "date-time" }
+  }
+}

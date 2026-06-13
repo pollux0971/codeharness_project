@@ -28,6 +28,8 @@ import {
   sendNotification,
   enrichBrownfieldStory,
   recordResolvedSettings,
+  classifyConsoleMessage,
+  routeConsoleMessage,
   type HarnessState,
   type StoryRecord,
   type RunBudget,
@@ -746,5 +748,41 @@ describe('settings-trace', () => {
     expect(events.length).toBe(1);
     expect(events[0].type).toBe('resolved_settings');
     if (existsSync(trace)) unlinkSync(trace);
+  });
+});
+
+// ── STORY-023.2: console message router ──────────────────────────────────────
+
+describe('console-router', () => {
+  it('status_query_answered_from_tracker', () => {
+    const c = classifyConsoleMessage('how is the build going?');
+    expect(c.intent).toBe('status_query');
+    const r = routeConsoleMessage(c, {});
+    expect(r.requiresModelFallback).toBe(false);
+  });
+
+  it('off_topic_refused', () => {
+    expect(classifyConsoleMessage('what is the weather today?').intent).toBe('off_topic');
+  });
+
+  it('raw_instruction_never_becomes_work', () => {
+    const c = classifyConsoleMessage('write me a poem');
+    const r = routeConsoleMessage(c, {});
+    expect(r.response).toMatch(/off-topic|only discuss/i);
+  });
+
+  it('ambiguous_intent_uses_model_fallback', () => {
+    const c = classifyConsoleMessage('ok');
+    const r = routeConsoleMessage(c, {});
+    expect(r.requiresModelFallback).toBe(true);
+  });
+
+  it('approval_response_classified', () => {
+    expect(classifyConsoleMessage('approved').intent).toBe('approval_response');
+    expect(classifyConsoleMessage('lgtm').intent).toBe('approval_response');
+  });
+
+  it('scope_change_request_classified', () => {
+    expect(classifyConsoleMessage('add a new story for caching').intent).toBe('scope_change_request');
   });
 });

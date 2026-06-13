@@ -1,0 +1,16 @@
+{
+  "name": "@codeharness/story-manager",
+  "version": "0.1.0",
+  "description": "Admissibility gate between tracker and scheduler",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": { "test": "vitest run" },
+  "dependencies": {
+    "@codeharness/harness-core": "workspace:*",
+    "@codeharness/event-log": "workspace:*",
+    "@codeharness/task-graph": "workspace:*"
+  },
+  "devDependencies": { "vitest": "^2", "typescript": "^5" }
+}

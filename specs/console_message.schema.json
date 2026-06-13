@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ConsoleMessage",
+  "type": "object",
+  "required": ["message_id", "text", "intent", "classified_at"],
+  "additionalProperties": false,
+  "properties": {
+    "message_id":     { "type": "string" },
+    "text":           { "type": "string" },
+    "intent":         { "enum": ["status_query", "off_topic", "approval_response", "scope_change_request", "ambiguous"] },
+    "classified_at":  { "type": "string", "format": "date-time" },
+    "classification_method": { "enum": ["keyword", "grammar", "model_fallback", null] }
+  }
+}

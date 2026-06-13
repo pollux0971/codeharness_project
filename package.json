@@ -10,6 +10,7 @@
   },
   "devDependencies": {
     "@codeharness/agent-output": "workspace:*",
+    "@codeharness/story-manager": "workspace:*",
     "@codeharness/context-manager": "workspace:*",
     "@codeharness/planning-steward": "workspace:*",
     "@codeharness/task-graph": "workspace:*",

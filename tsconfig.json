@@ -59,6 +59,9 @@
       "path": "packages/supervisor-runtime"
     },
     {
+      "path": "packages/story-manager"
+    },
+    {
       "path": "packages/task-graph"
     },
     {

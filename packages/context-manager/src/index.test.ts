@@ -9,6 +9,7 @@ import {
   compactContextWindow, DEFAULT_CONFIG,
   buildModeAwarePacket, assertDocWriteSafe,
   buildReviewerContextPacket, assertReviewerContextClean, REVIEWER_DENIED_SECTIONS,
+  injectOwnPreviousStorySummary,
   ArtifactRef, PhaseSignals, LifecyclePhase, ContextWindow, Turn,
 } from './index';
 import type { FullSkillManifest } from '@codeharness/skill-runtime';
@@ -525,5 +526,67 @@ describe('reviewer-context', () => {
     dirty.sections.push({ name: 'implementation_history', ref: 'impl', text: 'Developer tried X', tokenCount: 5, priority: 3 });
     const violations = assertReviewerContextClean(dirty);
     expect(violations).toContain('implementation_history');
+  });
+});
+
+// ── STORY-023.4: own-story-summary ───────────────────────────────────────────
+
+function makeTurnLocal(content: string, pinned = false): Turn {
+  return { role: 'assistant', content, tokenCount: Math.ceil(content.length / 4), pinned };
+}
+function makeWindowLocal(turns: Turn[]): ContextWindow {
+  return { turns, totalTokens: turns.reduce((s, t) => s + t.tokenCount, 0) };
+}
+
+describe('own-story-summary', () => {
+  it('developer_receives_own_previous_story_summary', () => {
+    const packet = { role: 'developer' as const, sections: [] as ArtifactRef[], excluded: [] as string[] };
+    const prev = { story_id: 'STORY-PREV', window: makeWindowLocal([
+      makeTurnLocal('Developer applied patch to src/calc.ts.'),
+      makeTurnLocal('Tests ran and passed with 5/5.'),
+    ])};
+    const updated = injectOwnPreviousStorySummary(packet, { role: 'developer', previousStory: prev });
+    expect(updated.sections.some(s => s.name === 'own_previous_story_summary')).toBe(true);
+  });
+
+  it('summary_is_compacted_not_raw', () => {
+    const bigTurn = makeTurnLocal('X'.repeat(5000));
+    const packet = { role: 'developer' as const, sections: [] as ArtifactRef[], excluded: [] as string[] };
+    const prev = { story_id: 'STORY-PREV', window: makeWindowLocal([bigTurn]) };
+    const updated = injectOwnPreviousStorySummary(packet, { role: 'developer', previousStory: prev, summaryFloor: 0.3 });
+    const section = updated.sections.find(s => s.name === 'own_previous_story_summary');
+    expect((section?.text ?? '').length).toBeLessThan(5000);
+    expect(section?.text ?? '').toContain('[compacted]');
+  });
+
+  it('other_agents_reasoning_excluded', () => {
+    const agentReasoningTurn = makeTurnLocal('AGENT_REASONING: The model chose approach X because...');
+    const normalTurn = makeTurnLocal('Applied patch to calc.ts successfully.');
+    const packet = { role: 'developer' as const, sections: [] as ArtifactRef[], excluded: [] as string[] };
+    const prev = { story_id: 'STORY-PREV', window: makeWindowLocal([agentReasoningTurn, normalTurn]) };
+    const updated = injectOwnPreviousStorySummary(packet, { role: 'developer', previousStory: prev });
+    const section = updated.sections.find(s => s.name === 'own_previous_story_summary');
+    expect(section?.text ?? '').not.toContain('AGENT_REASONING');
+    expect(section?.text ?? '').toContain('Applied patch');
+  });
+
+  it('reviewer_denial_unaffected', () => {
+    const devPacket = { role: 'developer' as const, sections: [] as ArtifactRef[], excluded: [] as string[] };
+    const prev = { story_id: 'STORY-PREV', window: makeWindowLocal([makeTurnLocal('dev work')]) };
+    injectOwnPreviousStorySummary(devPacket, { role: 'developer', previousStory: prev });
+
+    const reviewerPacket = buildReviewerContextPacket({
+      story_id: 'S-X', failing_test_output: 'err', acceptance_criteria: 'ac',
+      diff_under_review: 'diff', matching_genes: [],
+    });
+    const violations = assertReviewerContextClean(reviewerPacket);
+    expect(violations).toHaveLength(0);
+  });
+
+  it('non_developer_role_unchanged', () => {
+    const packet = { role: 'supervisor' as const, sections: [] as ArtifactRef[], excluded: [] as string[] };
+    const prev = { story_id: 'STORY-PREV', window: makeWindowLocal([makeTurnLocal('x')]) };
+    const updated = injectOwnPreviousStorySummary(packet as unknown as Parameters<typeof injectOwnPreviousStorySummary>[0], { role: 'supervisor' as unknown as 'developer', previousStory: prev });
+    expect(updated).toBe(packet);
   });
 });

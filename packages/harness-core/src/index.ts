@@ -645,3 +645,97 @@ export async function sendNotification(
 
   return { ok: false, channel: 'none', error: 'unknown channel type' };
 }
+
+// ── STORY-023.2: Console message router ──────────────────────────────────────
+
+export type MessageIntent =
+  | 'status_query' | 'off_topic' | 'approval_response'
+  | 'scope_change_request' | 'ambiguous';
+
+export interface ClassifiedMessage {
+  message_id: string;
+  text: string;
+  intent: MessageIntent;
+  classified_at: string;
+  classification_method: 'keyword' | 'grammar' | 'model_fallback' | null;
+}
+
+export interface ConsoleRouterConfig {
+  pendingGateStoryId?: string;
+}
+
+export interface RouterResult {
+  intent: MessageIntent;
+  response: string;
+  requiresModelFallback: boolean;
+}
+
+const _APPROVAL_POSITIVE = /^(approved?|lgtm|yes[!.]*)$/;
+const _APPROVAL_NEGATIVE = /^(den(?:y|ied)|reject(?:ed)?|no[!.]*)$/;
+const _STATUS_KEYWORDS = /\b(status|what['’]?s\s+happening|how\s+is|progress|current)\b/;
+const _SCOPE_CHANGE_KEYWORDS = /(add\s+stor|new\s+stor|change\s+scope|add\s+feature|add\s+requirement)/;
+const _HARNESS_GOAL_STATUS = /^\/(goal|status)\b/;
+const _HARNESS_APPROVE = /^\/approve\b/;
+const _PROJECT_NOUNS = /\b(stor(?:y|ies)|build|deploy(?:ment)?|cod(?:e|ing)|task(?:s)?|test(?:ing|s)?|harness|epic|ticket|patch|debug(?:ging)?|validat(?:e|ion|ing)|commit|branch|feature|run|progress|approv(?:e|al)|review|checkpoint|plan|trace|developer|supervisor|iteration|pipeline|sprint|backlog|defect|bug|fix)\b/;
+const _QUESTION_STARTERS = /^(what|who|where|when|why|how)\b/;
+const _IMPERATIVE_KEYWORDS = /^(write(?:\s+me)?|tell\s+me|explain|describe|help\s+me|give\s+me|generate|create\s+a|make\s+(?:me\s+)?a|draw|show\s+me)\b/;
+
+export function classifyConsoleMessage(
+  text: string,
+  messageId?: string,
+): ClassifiedMessage {
+  const id = messageId ?? crypto.randomUUID();
+  const classified_at = new Date().toISOString();
+  const normalized = text.trim().toLowerCase();
+
+  function result(intent: MessageIntent, classification_method: ClassifiedMessage['classification_method']): ClassifiedMessage {
+    return { message_id: id, text, intent, classified_at, classification_method };
+  }
+
+  // Rule 1: approval positive
+  if (_APPROVAL_POSITIVE.test(normalized)) return result('approval_response', 'keyword');
+
+  // Rule 2: approval negative
+  if (_APPROVAL_NEGATIVE.test(normalized)) return result('approval_response', 'keyword');
+
+  // Rule 3: status query
+  if (_STATUS_KEYWORDS.test(normalized)) return result('status_query', 'keyword');
+
+  // Rule 4: scope change
+  if (_SCOPE_CHANGE_KEYWORDS.test(normalized)) return result('scope_change_request', 'keyword');
+
+  // Rule 5: harness commands
+  if (_HARNESS_GOAL_STATUS.test(normalized)) return result('status_query', 'keyword');
+  if (_HARNESS_APPROVE.test(normalized)) return result('approval_response', 'keyword');
+
+  // Rule 6: off-topic heuristic (grammar)
+  const wordCount = normalized.split(/\s+/).filter(Boolean).length;
+  const hasProjectNoun = _PROJECT_NOUNS.test(normalized);
+  if (!hasProjectNoun && wordCount > 2 &&
+      (_QUESTION_STARTERS.test(normalized) || _IMPERATIVE_KEYWORDS.test(normalized))) {
+    return result('off_topic', 'grammar');
+  }
+
+  // Rule 7: ambiguous
+  return result('ambiguous', null);
+}
+
+export function routeConsoleMessage(
+  classified: ClassifiedMessage,
+  cfg: ConsoleRouterConfig,
+): RouterResult {
+  switch (classified.intent) {
+    case 'status_query':
+      return { intent: 'status_query', response: 'narrating from tracker — no model call needed', requiresModelFallback: false };
+    case 'approval_response':
+      return cfg.pendingGateStoryId
+        ? { intent: 'approval_response', response: `approval recorded for STORY-${cfg.pendingGateStoryId}`, requiresModelFallback: false }
+        : { intent: 'approval_response', response: 'no pending gate for this approval', requiresModelFallback: false };
+    case 'off_topic':
+      return { intent: 'off_topic', response: 'off-topic: I only discuss the current project run', requiresModelFallback: false };
+    case 'scope_change_request':
+      return { intent: 'scope_change_request', response: 'scope change: routing to Planning Steward', requiresModelFallback: false };
+    case 'ambiguous':
+      return { intent: 'ambiguous', response: 'intent unclear — using model fallback', requiresModelFallback: true };
+  }
+}

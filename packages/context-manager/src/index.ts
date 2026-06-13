@@ -653,3 +653,63 @@ export async function injectSkillsIntoPacket(
   };
 }
 
+// ── STORY-023.4: Developer own-story compacted summary ───────────────────────
+
+const DENIED_CONTENT_PATTERNS: RegExp[] = [
+  /agent[_\s]reasoning/i,
+  /implementation[_\s]history/i,
+  /rejected[_\s]approach[_\s]rationale/i,
+];
+
+export interface PreviousStoryContext {
+  story_id: string;
+  window: ContextWindow;
+}
+
+export interface OwnStorySummaryOptions {
+  role: AgentRole;
+  previousStory: PreviousStoryContext;
+  summaryFloor?: number;
+}
+
+export function injectOwnPreviousStorySummary(
+  packet: RoleContextPacket,
+  opts: OwnStorySummaryOptions,
+): RoleContextPacket {
+  if (opts.role !== 'developer') return packet;
+
+  const floor = opts.summaryFloor ?? 0.3;
+
+  const filteredTurns = opts.previousStory.window.turns.filter(
+    t => !DENIED_CONTENT_PATTERNS.some(p => p.test(t.content)),
+  );
+
+  const filteredWindow: ContextWindow = {
+    turns: filteredTurns,
+    totalTokens: filteredTurns.reduce((s, t) => s + t.tokenCount, 0),
+  };
+
+  const compactCfg: ContextManagerConfig = {
+    ...DEFAULT_CONFIG,
+    level1NodeTokenThreshold: 0,
+    level2ChainTokenThreshold: Number.MAX_SAFE_INTEGER,
+    keepFirstTurns: 0,
+    keepLastTurns: 0,
+    compressionRateFloor: floor,
+    slidingWindowMaxTurns: Number.MAX_SAFE_INTEGER,
+  };
+  const compacted = compactContextWindow(filteredWindow, compactCfg);
+
+  const text = compacted.turns.map(t => t.content).join(' ');
+
+  const ref: ArtifactRef = {
+    name: 'own_previous_story_summary',
+    ref: opts.previousStory.story_id,
+    text,
+    tokenCount: Math.ceil(text.length / 4),
+    priority: 2,
+  };
+
+  return { ...packet, sections: [...packet.sections, ref] };
+}
+
