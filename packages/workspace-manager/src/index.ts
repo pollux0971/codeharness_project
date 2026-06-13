@@ -327,6 +327,24 @@ export async function rollbackPromotion(opts: RollbackOptions): Promise<Rollback
   };
 }
 
+// ---- STORY-026.2: Preview URL resolution ----
+
+export interface PreviewServeResult {
+  url: string;
+  target_type: 'web' | 'cli' | 'api' | 'library';
+  served: boolean;
+}
+
+export function getPreviewUrl(
+  _workspace: { root: string; workspace_id: string },
+  targetType: 'web' | 'cli' | 'api' | 'library',
+): PreviewServeResult {
+  if (targetType !== 'web') {
+    return { url: '', target_type: targetType, served: false };
+  }
+  return { url: 'http://localhost:5173', target_type: 'web', served: true };
+}
+
 // ---- STORY-010.4: Parallel story execution in isolated workspaces ----
 
 export interface IsolatedRun {

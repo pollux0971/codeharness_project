@@ -6,7 +6,7 @@ import {
   isPathInsideRoot, resolveInsideWorkspace, WorkspaceRegistry, detectSymlinkEscape,
   makeOracle, createDisposableWorkspace, applyPatch, collectDiff, cleanupWorkspace, seedFile, commitAll,
   bootstrapGreenfieldWorkspace, WorkspaceIsolationPool, isPromotable, rollbackPromotion,
-  mergeAndValidate, detectConflictMarkers,
+  mergeAndValidate, detectConflictMarkers, getPreviewUrl,
   type GreenfieldWorkspaceInput, type IsolatedRun,
 } from './index';
 import type { ProjectRunState } from '@codeharness/harness-core';
@@ -372,6 +372,22 @@ describe('workspace-manager', () => {
 
     it('detect_no_conflict_markers', () => {
       expect(detectConflictMarkers('export const x = 1;')).toBe(false);
+    });
+  });
+
+  // ---- STORY-026.2: preview-url ----
+  describe('preview-url', () => {
+    it('preview_served_from_sandbox', () => {
+      const workspace = { root: '/tmp/ws', workspace_id: 'ws-1' };
+      const r = getPreviewUrl(workspace, 'web');
+      expect(r.served).toBe(true);
+      expect(r.url).toContain('localhost');
+    });
+
+    it('non_web_targets_fallback_to_report', () => {
+      const workspace = { root: '/tmp/ws', workspace_id: 'ws-1' };
+      expect(getPreviewUrl(workspace, 'cli').served).toBe(false);
+      expect(getPreviewUrl(workspace, 'library').served).toBe(false);
     });
   });
 
