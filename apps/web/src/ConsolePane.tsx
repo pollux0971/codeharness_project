@@ -1,5 +1,6 @@
 import type { TraceEvent } from '@codeharness/harness-core';
 import { ROLE_CSS_VAR } from './theme';
+import { ReasoningEvent } from './ReasoningEvent';
 
 export type PaneRole = 'supervisor' | 'developer_debugger' | 'reviewer';
 
@@ -83,14 +84,31 @@ export function ConsolePane({ paneRole, events, title }: ConsolePaneProps): JSX.
       >
         {filtered.length === 0
           ? <span style={{ color: 'rgba(230,237,243,.34)' }}>— no events —</span>
-          : filtered.map(e => (
-            <div
-              key={e.event_id}
-              data-event-type={(e as any).event_type ?? e.type}
-            >
-              {formatLine(e)}
-            </div>
-          ))
+          : filtered.map(e => {
+            const evType = (e as any).event_type ?? e.type;
+            if (evType === 'reasoning_event') {
+              const full: string = (e as any).full_text ?? (e as any).summary ?? '';
+              const lines = full.split('\n');
+              const preview = lines.slice(0, 2).join('\n');
+              return (
+                <ReasoningEvent
+                  key={e.event_id}
+                  eventId={e.event_id}
+                  preview={preview}
+                  fullText={full}
+                  agentRole={(e as any).agent_role}
+                />
+              );
+            }
+            return (
+              <div
+                key={e.event_id}
+                data-event-type={evType}
+              >
+                {formatLine(e)}
+              </div>
+            );
+          })
         }
       </pre>
     </div>
