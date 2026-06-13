@@ -31,6 +31,7 @@ import {
   classifyConsoleMessage,
   routeConsoleMessage,
   applyBacklogDelta,
+  transitionToTerminalState,
   type HarnessState,
   type StoryRecord,
   type RunBudget,
@@ -42,6 +43,7 @@ import {
   type BrownfieldCodeGraphClient,
   type BacklogTransaction,
   type BacklogDeltaInput,
+  type TerminalStateCause,
 } from './index.js';
 import { readJsonl } from '@codeharness/event-log';
 import { DEFAULT_SETTINGS } from '@codeharness/settings';
@@ -814,5 +816,43 @@ describe('backlog-transaction', () => {
     const events = readJsonl(t);
     expect(events[0].type).toBe('backlog_updated');
     if (existsSync(t)) unlinkSync(t);
+  });
+});
+
+// ── STORY-027.1: terminal-states ──────────────────────────────────────────────
+
+describe('terminal-states', () => {
+  it('failed_aborted_cancelled_are_explicit_states', async () => {
+    const trace = join(tmpdir(), `term-${Date.now()}.jsonl`);
+    const cause: TerminalStateCause = { state: 'failed', reason: 'budget exhausted', trigger: 'budget_exhausted' };
+    const r = await transitionToTerminalState(cause, trace);
+    expect(r.new_state).toBe('failed');
+    if (existsSync(trace)) unlinkSync(trace);
+  });
+
+  it('cause_recorded_in_trace', async () => {
+    const trace = join(tmpdir(), `term-${Date.now()}.jsonl`);
+    const cause: TerminalStateCause = { state: 'aborted', reason: 'human stopped', trigger: 'human_stop' };
+    await transitionToTerminalState(cause, trace);
+    const events = readJsonl(trace);
+    expect(events[0].type).toBe('run_terminal');
+    expect(events[0].payload?.trigger).toBe('human_stop');
+    if (existsSync(trace)) unlinkSync(trace);
+  });
+
+  it('stop_run_transitions_to_aborted', async () => {
+    const trace = join(tmpdir(), `term-${Date.now()}.jsonl`);
+    const cause: TerminalStateCause = { state: 'aborted', reason: 'operator stop', trigger: 'human_stop' };
+    const r = await transitionToTerminalState(cause, trace);
+    expect(r.new_state).toBe('aborted');
+    if (existsSync(trace)) unlinkSync(trace);
+  });
+
+  it('cancelled_on_bundle_rejection', async () => {
+    const trace = join(tmpdir(), `term-${Date.now()}.jsonl`);
+    const cause: TerminalStateCause = { state: 'cancelled', reason: 'bundle rejected', trigger: 'human_reject_bundle' };
+    const r = await transitionToTerminalState(cause, trace);
+    expect(r.new_state).toBe('cancelled');
+    if (existsSync(trace)) unlinkSync(trace);
   });
 });

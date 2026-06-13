@@ -693,6 +693,47 @@ export async function applyBacklogDelta(
   return { added_story_ids, epic_list_additions, transaction_at };
 }
 
+// ── STORY-027.1: Terminal run states ─────────────────────────────────────────
+
+export type TerminalRunState = 'failed' | 'aborted' | 'cancelled';
+
+export interface TerminalStateCause {
+  state: TerminalRunState;
+  reason: string;
+  trigger: 'budget_exhausted' | 'repo_invalid' | 'attempt_budget_consumed'
+         | 'human_stop' | 'human_reject_bundle' | 'run_dropped';
+  story_id?: string;
+}
+
+export type RunTerminationResult = {
+  previous_state: string;
+  new_state: TerminalRunState;
+  cause: TerminalStateCause;
+  trace_event_id: string;
+};
+
+export async function transitionToTerminalState(
+  cause: TerminalStateCause,
+  traceLogPath: string
+): Promise<RunTerminationResult> {
+  const existing = readJsonl(traceLogPath);
+  const last = existing[existing.length - 1];
+  const event = createTraceEvent({
+    run_id: cause.story_id ?? 'run',
+    seq: last ? last.seq + 1 : 0,
+    previous_event_hash: last ? (last.hash ?? null) : null,
+    type: 'run_terminal',
+    payload: cause as unknown as Record<string, unknown>,
+  });
+  appendJsonl(traceLogPath, event);
+  return {
+    previous_state: 'running',
+    new_state: cause.state,
+    cause,
+    trace_event_id: event.event_id,
+  };
+}
+
 // ── STORY-023.2: Console message router ──────────────────────────────────────
 
 export type MessageIntent =
