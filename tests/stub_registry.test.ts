@@ -27,7 +27,9 @@ function scanStubs(): StubRef[] {
 
 describe('stub-registry', () => {
   it('every_documented_stub_has_a_registered_owner', () => {
-    const storyIds = fs.readdirSync(storiesDir).filter(f => f.endsWith('.md')).map(f => f.replace('.md', ''));
+    const storyIds = fs.existsSync(storiesDir)
+      ? fs.readdirSync(storiesDir).filter(f => f.endsWith('.md')).map(f => f.replace('.md', ''))
+      : [];
     const known = new Set<string>([...storyIds, ...registry.valid_roadmap_owners]);
     const r = validateDocumentedStubsHaveStory(scanStubs(), registry.stubs, known);
     expect(r.errors).toEqual([]);
