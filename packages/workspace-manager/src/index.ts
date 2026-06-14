@@ -366,13 +366,22 @@ export class WorkspaceIsolationPool {
     stories: { story_id: string }[],
     runInnerLoop: (story_id: string, ws: WorkspaceManifest) => Promise<boolean>,
   ): Promise<IsolatedRun[]> {
+    // Provision every isolated workspace up front. createDisposableWorkspace is
+    // synchronous (blocking git init), so creating it inside the Promise.all map
+    // would run each story's setup to completion before the next story's async
+    // body reaches its first await — serializing the inner-loop starts and
+    // defeating the concurrency this method promises. Hoisting setup out of the
+    // map lets all inner loops begin together.
+    const prepared = stories.map((s) => ({
+      story_id: s.story_id,
+      ws: createDisposableWorkspace(this.registry, { story_id: s.story_id }),
+    }));
     return Promise.all(
-      stories.map(async (s) => {
-        const ws = createDisposableWorkspace(this.registry, { story_id: s.story_id });
+      prepared.map(async ({ story_id, ws }) => {
         try {
-          const passed = await runInnerLoop(s.story_id, ws);
+          const passed = await runInnerLoop(story_id, ws);
           return {
-            story_id: s.story_id,
+            story_id,
             workspace: ws,
             result: (passed ? 'passed' : 'escalated') as 'passed' | 'escalated',
             checkpoint_sha: null,

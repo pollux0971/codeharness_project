@@ -11,6 +11,9 @@ importers:
       '@codeharness/agent-output':
         specifier: workspace:*
         version: link:packages/agent-output
+      '@codeharness/codex-auth':
+        specifier: workspace:*
+        version: link:packages/codex-auth
       '@codeharness/context-manager':
         specifier: workspace:*
         version: link:packages/context-manager
@@ -44,6 +47,12 @@ importers:
       '@codeharness/shared':
         specifier: workspace:*
         version: link:packages/shared
+      '@codeharness/skill-runtime':
+        specifier: workspace:*
+        version: link:packages/skill-runtime
+      '@codeharness/story-manager':
+        specifier: workspace:*
+        version: link:packages/story-manager
       '@codeharness/task-graph':
         specifier: workspace:*
         version: link:packages/task-graph
@@ -127,7 +136,11 @@ importers:
         specifier: workspace:*
         version: link:../skill-runtime
 
-  packages/debugger-runtime: {}
+  packages/debugger-runtime:
+    dependencies:
+      '@codeharness/validator-suite':
+        specifier: workspace:*
+        version: link:../validator-suite
 
   packages/developer-runtime: {}
 
@@ -167,6 +180,25 @@ importers:
 
   packages/preflight-runner: {}
 
+  packages/reviewer-runtime:
+    dependencies:
+      '@codeharness/event-log':
+        specifier: workspace:*
+        version: link:../event-log
+      '@codeharness/failure-bank':
+        specifier: workspace:*
+        version: link:../failure-bank
+      '@codeharness/validator-suite':
+        specifier: workspace:*
+        version: link:../validator-suite
+    devDependencies:
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+      vitest:
+        specifier: ^2
+        version: 2.1.9(@types/node@22.19.20)(@vitest/ui@2.1.9)(jsdom@24.1.3)(lightningcss@1.32.0)
+
   packages/settings:
     dependencies:
       yaml:
@@ -178,6 +210,25 @@ importers:
   packages/skill-runtime: {}
 
   packages/skill-tester: {}
+
+  packages/story-manager:
+    dependencies:
+      '@codeharness/event-log':
+        specifier: workspace:*
+        version: link:../event-log
+      '@codeharness/harness-core':
+        specifier: workspace:*
+        version: link:../harness-core
+      '@codeharness/task-graph':
+        specifier: workspace:*
+        version: link:../task-graph
+    devDependencies:
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+      vitest:
+        specifier: ^2
+        version: 2.1.9(@types/node@22.19.20)(@vitest/ui@2.1.9)(jsdom@24.1.3)(lightningcss@1.32.0)
 
   packages/supervisor-runtime: {}
 

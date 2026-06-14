@@ -1,5 +1,5 @@
 import './theme.css';
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { TraceViewer } from './TraceViewer';
 import { ApprovalQueue } from './ApprovalQueue';
 import { ApprovalCenter, type EscalationData } from './ApprovalCenter';
@@ -31,8 +31,8 @@ const MOCK_PROMO_HISTORY: PromotionHistoryEntry[] = [
   { promotion_id: 'promo-2026-06-13', promoted_at: '2026-06-13T00:00Z', story_ids_promoted: ['STORY-016.1', 'STORY-016.2'], isLatest: true },
 ];
 const MOCK_ESCALATIONS: EscalationData[] = [
-  { id: 'esc-mock-001', type: 'scope_expansion', story_id: 'STORY-000.1', reason: 'Repair requires writing outside allowed write-set', requested_decision: 'Approve scope expansion or reject the repair.' },
-  { id: 'esc-mock-002', type: 'attempt_budget_exceeded', story_id: 'STORY-000.2', reason: 'Developer/Debugger cycle budget exhausted (3/3)', requested_decision: 'Review failure genes and decide whether to retry or abandon.' },
+  { id: 'esc-mock-001', type: 'scope_expansion', story_id: 'STORY-000.1', raised_by: 'developer', reason: 'Repair requires writing outside allowed write-set', requested_decision: 'Approve scope expansion or reject the repair.', options: [{ option_id: 'widen', tradeoff: 'adds one file to scope; keeps the story whole' }, { option_id: 'split', tradeoff: 'new story; smaller blast radius, more handoff' }] },
+  { id: 'esc-mock-002', type: 'attempt_budget_exceeded', story_id: 'STORY-000.2', raised_by: 'debugger', reason: 'Developer/Debugger cycle budget exhausted (3/3)', requested_decision: 'Review failure genes and decide whether to retry or abandon.', options: [{ option_id: 'retry', tradeoff: 'reset budget; risk repeating the same failure' }, { option_id: 'abandon', tradeoff: 'drop story; unblocks queue but loses progress' }] },
 ];
 const ROLE: Record<string, string> = {
   planning_steward: '#8AB4F8', supervisor: '#C792EA', developer: '#5BD6C0',
@@ -50,13 +50,14 @@ export function App() {
   useEffect(() => {
     (async () => {
       try {
-        const [platform, skills, agents, packages, plugins, escalations] = await Promise.all([
+        const [platform, skills, agents, packages, plugins, escalations, stm] = await Promise.all([
           j('/api/platform'), j('/api/skills'), j('/api/agents'),
           j('/api/packages'), j('/api/plugins'), j('/api/escalations'),
+          j('/api/state-machine'),
         ]);
         const convs = await j('/api/conversations');
         const conv = convs.conversations[0] ? await j('/api/conversations/' + convs.conversations[0].run_id) : { messages: [] };
-        setD({ platform, skills: skills.skills, agents: agents.agents, packages: packages.packages, plugins: plugins.plugins, escalations: escalations.escalations, conv });
+        setD({ platform, skills: skills.skills, agents: agents.agents, packages: packages.packages, plugins: plugins.plugins, escalations: escalations.escalations, conv, stateMachine: stm.states });
       } catch (e: any) { setErr('Cannot reach the CodeHarness API at ' + API + '. Start it with: pnpm --filter @codeharness/api dev'); }
     })();
   }, []);
@@ -68,12 +69,15 @@ export function App() {
   return (
     <main style={wrap} data-testid="cockpit-shell">
       <header style={{ padding: '14px 22px', borderBottom: '1px solid rgba(230,237,243,.1)' }}>
-        <span style={{ fontWeight: 700 }}>Code<span style={{ color: '#5BD6C0' }}>Harness</span> · Cockpit</span>
-        {d && (
-          <span style={{ ...mono, marginLeft: 16, fontSize: 12, color: 'rgba(230,237,243,.56)' }}>
-            {d.platform.agents} agents · {d.platform.packages} packages · {d.platform.skills} skills · {d.platform.states} states
-          </span>
-        )}
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap' as const }}>
+          <span style={{ fontWeight: 700 }}>Code<span style={{ color: '#5BD6C0' }}>Harness</span> · Cockpit</span>
+          {d && (
+            <span style={{ ...mono, fontSize: 12, color: 'rgba(230,237,243,.56)' }}>
+              {d.platform.agents} agents · {d.platform.packages} packages · {d.platform.skills} skills · {d.platform.states} states
+            </span>
+          )}
+        </div>
+        {d?.stateMachine && <LifecycleRail states={d.stateMachine} />}
       </header>
       {/* Idea intake form — collapsed behind toggle */}
       <IdeaIntakeToggle />
@@ -99,13 +103,31 @@ export function App() {
               <div style={{ fontSize: 11.5, marginTop: 3 }}><span style={dim}>never </span><span style={{ color: '#F2A65A' }}>{a.never}</span></div>
             </div>
           ))}
-          {d && d.skills.map((s: any) => (
-            <div key={s.skill_id} style={{ background: '#141E2A', borderLeft: `2px solid ${ROLE[s.agent_role] || '#9FB0BF'}`, border: '1px solid rgba(230,237,243,.1)', borderRadius: 9, padding: '10px 12px', marginBottom: 8 }}>
-              <div style={{ ...mono, fontSize: 12 }}>{s.skill_id}</div>
-              {s.description && <div style={{ fontSize: 12, color: 'rgba(230,237,243,.56)', marginTop: 5, lineHeight: 1.5 }}>{s.description}</div>}
-              <div style={{ ...mono, fontSize: 10, marginTop: 7, color: s.status === 'registered' ? '#7EE081' : '#F2A65A' }}>{s.status}</div>
-            </div>
-          ))}
+          {d && (() => {
+            const byRole: Record<string, any[]> = {};
+            d.skills.forEach((s: any) => { (byRole[s.agent_role] = byRole[s.agent_role] || []).push(s); });
+            const order = ['planning_steward', 'supervisor', 'developer', 'debugger', 'shared'];
+            return order.filter(r => byRole[r]).map(r => (
+              <Fragment key={r}>
+                <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.04em', textTransform: 'uppercase' as const, color: 'rgba(230,237,243,.56)', margin: '14px 0 6px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ width: 7, height: 7, borderRadius: 2, background: ROLE[r] || '#9FB0BF', display: 'inline-block', flexShrink: 0 }} />
+                  {r} · {byRole[r].length}
+                </div>
+                {byRole[r].map((s: any) => (
+                  <div key={s.skill_id} style={{ background: '#141E2A', borderLeft: `2px solid ${ROLE[r] || '#9FB0BF'}`, border: '1px solid rgba(230,237,243,.1)', borderRadius: 9, padding: '10px 12px', marginBottom: 8 }}>
+                    <div style={{ ...mono, fontSize: 12 }}>{s.skill_id}</div>
+                    {s.description && <div style={{ fontSize: 12, color: 'rgba(230,237,243,.56)', marginTop: 5, lineHeight: 1.5 }}>{s.description}</div>}
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' as const, marginTop: 8 }}>
+                      <span style={{ ...mono, fontSize: 10, padding: '2px 7px', borderRadius: 6, border: '1px solid rgba(230,237,243,.1)', color: s.status === 'registered' ? '#7EE081' : s.status === 'needs_tests' ? '#F2A65A' : 'rgba(230,237,243,.34)' }}>{s.status || '—'}</span>
+                      {(s.depends_on || []).map((dep: string) => (
+                        <span key={dep} style={{ ...mono, fontSize: 10, padding: '2px 7px', borderRadius: 6, border: '1px solid rgba(230,237,243,.1)', color: 'rgba(230,237,243,.34)' }}>⇠ {dep.split('.').pop()}</span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </Fragment>
+            ));
+          })()}
         </section>
         {/* Panel B — Conversation + Trace */}
         <section data-panel="conversation" style={{ padding: 18, borderRight: '1px solid rgba(230,237,243,.1)' }}>
@@ -129,6 +151,16 @@ export function App() {
         <section data-panel="platform" style={{ padding: 18 }}>
           <Eyebrow n="C" t="Platform" />
           {!d && !err && <Placeholder label="platform" />}
+          <Group t="Packages — impl &amp; tests" />
+          {d && d.packages.map((p: any) => (
+            <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 8, ...mono, fontSize: 11.5, padding: '6px 0', borderBottom: '1px solid rgba(230,237,243,.1)' }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: p.tested ? '#7EE081' : 'rgba(230,237,243,.34)', flexShrink: 0 }} />
+              <span style={{ color: 'rgba(230,237,243,.56)', flex: 1, wordBreak: 'break-all' as const }}>{p.name}</span>
+              {p.stubs > 0
+                ? <span style={{ color: '#F2A65A', fontSize: 10 }}>{p.stubs} stub{p.stubs > 1 ? 's' : ''}</span>
+                : <span style={{ color: '#7EE081', fontSize: 10 }}>●</span>}
+            </div>
+          ))}
           <Group t="Approval queue (mock)" />
           <ApprovalQueue />
           <Group t="Approval center" />
@@ -140,6 +172,8 @@ export function App() {
                   reason: e.reason,
                   story_id: e.story_id,
                   requested_decision: e.requested_decision,
+                  options: e.options,
+                  raised_by: e.raised_by,
                 }))
               : MOCK_ESCALATIONS}
             promotions={[]}
@@ -160,6 +194,16 @@ export function App() {
     </main>
   );
 }
+const LifecycleRail = ({ states }: { states: string[] }) => (
+  <div style={{ display: 'flex', alignItems: 'center', overflowX: 'auto', paddingBottom: 4, gap: 0, marginTop: 10 }}>
+    {states.map((s, i) => (
+      <Fragment key={s}>
+        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10.5, color: 'rgba(230,237,243,.34)', whiteSpace: 'nowrap', padding: '3px 9px', border: '1px solid rgba(230,237,243,.1)', borderRadius: 999, background: '#141E2A' }}>{s}</span>
+        {i < states.length - 1 && <span style={{ color: 'rgba(230,237,243,.34)', fontSize: 11, padding: '0 4px', flexShrink: 0 }}>›</span>}
+      </Fragment>
+    ))}
+  </div>
+);
 const Eyebrow = ({ n, t }: { n: string; t: string }) => (
   <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10.5, letterSpacing: '.14em', textTransform: 'uppercase', color: 'rgba(230,237,243,.34)', marginBottom: 12 }}>
     <span style={{ color: '#5BD6C0' }}>{n}</span> &nbsp;{t}

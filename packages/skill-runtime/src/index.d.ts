@@ -1,12 +1,12 @@
 export interface SkillPackageManifest {
     skill_id: string;
-    agent_role: 'planning_steward' | 'supervisor' | 'developer' | 'debugger';
+    agent_role: 'planning_steward' | 'supervisor' | 'developer' | 'debugger' | 'reviewer';
     path: string;
 }
 export declare function isSkillForRole(skill: SkillPackageManifest, role: SkillPackageManifest['agent_role']): boolean;
 export interface FullSkillManifest {
     skill_id: string;
-    agent_role: 'planning_steward' | 'supervisor' | 'developer' | 'debugger';
+    agent_role: 'planning_steward' | 'supervisor' | 'developer' | 'debugger' | 'reviewer';
     path: string;
     description?: string;
     version?: number;

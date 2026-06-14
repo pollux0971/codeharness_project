@@ -6,12 +6,19 @@ const dim  = { color: 'rgba(230,237,243,.34)' } as const;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+export interface EscalationOption {
+  option_id: string;
+  tradeoff: string;
+}
+
 export interface EscalationData {
   id: string;
   type: string;
   reason: string;
   story_id?: string;
   requested_decision?: string;
+  raised_by?: string;
+  options?: EscalationOption[];
 }
 
 export interface PromotionData {
@@ -65,8 +72,18 @@ export function EscalationCard({ escalation, onDecide }: EscalationCardProps): J
         {escalation.reason}
       </div>
       {escalation.requested_decision && (
-        <div style={{ fontSize: 12, lineHeight: 1.5, marginBottom: 8, ...dim }}>
+        <div style={{ fontSize: 12, lineHeight: 1.5, marginBottom: 6, ...dim }}>
           {escalation.requested_decision}
+        </div>
+      )}
+      {escalation.options && escalation.options.length > 0 && (
+        <div style={{ marginBottom: 8 }}>
+          {escalation.options.map(opt => (
+            <div key={opt.option_id} style={{ fontSize: 11.5, ...dim, paddingLeft: 10, borderLeft: '2px solid rgba(230,237,243,.1)', marginBottom: 4 }}>
+              <span style={{ ...mono, color: '#E6EDF3', fontWeight: 500 }}>{opt.option_id}</span>
+              {' — '}{opt.tradeoff}
+            </div>
+          ))}
         </div>
       )}
       <textarea

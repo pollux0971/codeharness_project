@@ -7,3 +7,11 @@ artifacts/*
 !artifacts/.gitkeep
 .env
 *.log
+# Codex account binding (per-developer, machine-local; never commit). Token itself
+# lives in ~/.codex/auth.json (also gitignored at repo root).
+/config.json
+# Compiled output in package sources — every package exports ./src/index.ts and runs
+# directly under `node --experimental-strip-types`; the emitted .js/.d.ts/.js.map are build noise.
+packages/*/src/*.js
+packages/*/src/*.js.map
+packages/*/src/*.d.ts

@@ -6,10 +6,13 @@
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc -b --pretty false",
     "walk": "node --experimental-strip-types scripts/walking-skeleton.ts",
-    "ci": "tsc -b --pretty false && vitest run && python3 -m pytest -q skills/"
+    "test:all": "node --experimental-strip-types scripts/test-all.ts",
+    "test:until": "node --experimental-strip-types scripts/test-all.ts --until=L3",
+    "ci": "tsc -b --pretty false && node --experimental-strip-types scripts/test-all.ts"
   },
   "devDependencies": {
     "@codeharness/agent-output": "workspace:*",
+    "@codeharness/codex-auth": "workspace:*",
     "@codeharness/story-manager": "workspace:*",
     "@codeharness/context-manager": "workspace:*",
     "@codeharness/planning-steward": "workspace:*",
@@ -23,6 +26,7 @@
     "@codeharness/preflight-runner": "workspace:*",
     "@codeharness/settings": "workspace:*",
     "@codeharness/shared": "workspace:*",
+    "@codeharness/skill-runtime": "workspace:*",
     "@codeharness/tool-executor": "workspace:*",
     "@codeharness/validator-suite": "workspace:*",
     "@codeharness/workspace-manager": "workspace:*",
