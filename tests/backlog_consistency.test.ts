@@ -8,9 +8,12 @@ import { fileURLToPath } from 'node:url';
 //   builder/epics/EPIC_LIST.md   (the stable backlog)
 //   builder/tracker/tracker_state.json (the /goal loop's machine state)
 // See builder/claude-code/03_TRACKER_UPDATE_RULES.md (invariants 2-4).
+// When running as a standalone product repo (no builder/ directory), all
+// tests in this suite are skipped — they are only meaningful in the monorepo.
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const builderDir = path.join(here, '..', '..', 'builder');
+const builderPresent = fs.existsSync(builderDir);
 const storiesDir = path.join(builderDir, 'stories');
 const epicListPath = path.join(builderDir, 'epics', 'EPIC_LIST.md');
 const trackerPath = path.join(builderDir, 'tracker', 'tracker_state.json');
@@ -30,14 +33,14 @@ function epicListIds(): Set<string> {
   return new Set(text.match(STORY_RE) ?? []);
 }
 
-const tracker = JSON.parse(fs.readFileSync(trackerPath, 'utf8'));
+const tracker = builderPresent ? JSON.parse(fs.readFileSync(trackerPath, 'utf8')) : { stories: [], status_enum: [] };
 const trackerIds = new Set<string>(tracker.stories.map((s: { story_id: string }) => s.story_id));
 
 function diff(a: Set<string>, b: Set<string>): string[] {
   return [...a].filter((x) => !b.has(x)).sort();
 }
 
-describe('backlog-consistency', () => {
+describe.skipIf(!builderPresent)('backlog-consistency', () => {
   it('every_story_file_has_a_tracker_entry', () => {
     expect(diff(storyFileIds(), trackerIds)).toEqual([]);
   });
