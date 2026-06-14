@@ -9,27 +9,27 @@
     {
       "symbol": "producePatchProposal",
       "file": "developer-runtime/src/index.ts",
-      "owner": "ROADMAP:phase-2"
+      "owner": "STORY-029.3"
     },
     {
       "symbol": "rollbackWorkspace",
       "file": "harness-core/src/index.ts",
-      "owner": "STORY-002.1"
+      "owner": "STORY-029.7"
     },
     {
       "symbol": "composeDeveloperTaskPacket",
       "file": "supervisor-runtime/src/index.ts",
-      "owner": "STORY-002.3"
+      "owner": "STORY-029.2"
     },
     {
       "symbol": "composeDebuggerTaskPacket",
       "file": "supervisor-runtime/src/index.ts",
-      "owner": "STORY-002.3"
+      "owner": "STORY-029.4"
     },
     {
       "symbol": "summarizeProgress",
       "file": "supervisor-runtime/src/index.ts",
-      "owner": "STORY-002.3"
+      "owner": "STORY-029.6"
     }
   ]
 }
